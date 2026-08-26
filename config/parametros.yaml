@@ -1,0 +1,197 @@
+projeto:
+  nome: SmartML Ultra
+  versao: "100.0"
+  ambiente: dev
+
+custos:
+  comissao_marketplace_pct: 0.165
+  imposto_pct: 0.060
+  taxa_financeira_pct: 0.015
+  frete_padrao_brl: 45.00
+  embalagem_brl: 3.50
+  emite_nf: true
+
+margem:
+  objetivo_pct: 0.15
+  minima_aceitavel_pct: 0.08
+  arredondamento_preco: 0.90
+
+classificacao:
+  fator_faixa_boa: 0.70
+  registrar_prejuizo: true
+  ordenar_por: lucro_brl
+
+cambio:
+  moeda_base: BRL
+  moedas_origem:
+    - USD
+    - PYG
+  fonte: manual
+  cotacoes_manuais:
+    USD: 5.45
+    PYG: 0.00075
+  spread_seguranca_pct: 0.02
+
+scraping:
+  base_url: "https://lista.mercadolivre.com.br/"
+  timeout_s: 20
+  max_retries: 3
+  backoff_inicial_s: 2
+  delay_entre_requests_s: 1.5
+
+auditoria:
+  min_amostras_historico: 30
+  desvio_max_preco_pct: 0.35
+  score_minimo_oportunidade: 0.60
+
+paths:
+  raw: "data/raw"
+  processed: "data/processed"
+  logs: "logs"
+
+perfis_categoria:
+  padrao:
+    descricao: "Nao classificado - regra generica"
+    prioridade: 99
+    comissao_pct: 0.165
+    margem_objetivo_pct: 0.15
+    margem_minima_pct: 0.08
+    lucro_minimo_brl: 15.00
+    palavras_chave: []
+
+  acessorios:
+    descricao: "Capas, cabos, carregadores - ticket baixo"
+    prioridade: 10
+    comissao_pct: 0.165
+    margem_objetivo_pct: 0.25
+    margem_minima_pct: 0.12
+    lucro_minimo_brl: 6.00
+    palavras_chave:
+      - capa
+      - case
+      - cabo
+      - carregador
+      - pelicula
+      - suporte
+      - adaptador
+      - fonte usb
+
+  eletronicos:
+    descricao: "Fones, smartwatch, tablets, consoles"
+    prioridade: 20
+    comissao_pct: 0.155
+    margem_objetivo_pct: 0.12
+    margem_minima_pct: 0.06
+    lucro_minimo_brl: 25.00
+    palavras_chave:
+      - airpods
+      - fone
+      - headphone
+      - earbuds
+      - smartwatch
+      - watch
+      - tablet
+      - ipad
+      - caixa de som
+      - jbl
+
+  informatica:
+    descricao: "Notebooks, perifericos, componentes"
+    prioridade: 20
+    comissao_pct: 0.150
+    margem_objetivo_pct: 0.11
+    margem_minima_pct: 0.055
+    lucro_minimo_brl: 70.00
+    palavras_chave:
+      - notebook
+      - macbook
+      - ssd
+      - memoria ram
+      - placa de video
+      - teclado
+      - mouse
+      - monitor
+
+  celular_intermediario:
+    descricao: "Motorola, Samsung linha A, Xiaomi Redmi"
+    prioridade: 30
+    comissao_pct: 0.145
+    margem_objetivo_pct: 0.10
+    margem_minima_pct: 0.05
+    lucro_minimo_brl: 60.00
+    palavras_chave:
+      - moto g
+      - moto e
+      - galaxy a
+      - redmi
+      - realme
+      - infinix
+
+  celular_premium:
+    descricao: "iPhone/Galaxy lancamento - giro alto, margem fina"
+    prioridade: 30
+    comissao_pct: 0.130
+    margem_objetivo_pct: 0.06
+    margem_minima_pct: 0.03
+    lucro_minimo_brl: 150.00
+    palavras_chave:
+      - iphone
+      - galaxy s
+      - galaxy z
+      - pixel
+      - xiaomi 1
+      - poco f
+
+frete:
+  divisor_cubagem: 6000
+  peso_minimo_kg: 0.10
+  embalagem:
+    peso_extra_kg: 0.08
+    custo_brl: 1.20
+  faixas:
+    - ate_kg: 0.30
+      custo_brl: 19.90
+    - ate_kg: 0.50
+      custo_brl: 22.90
+    - ate_kg: 1.00
+      custo_brl: 26.90
+    - ate_kg: 2.00
+      custo_brl: 32.90
+    - ate_kg: 5.00
+      custo_brl: 42.90
+  acima_da_ultima_faixa:
+    custo_base_brl: 42.90
+    adicional_por_kg_brl: 7.50
+  frete_gratis:
+    ativo: true
+    preco_minimo_brl: 79.00
+    subsidio_vendedor_pct: 0.50
+
+
+frete:
+  divisor_cubagem: 6000
+  peso_embalagem_kg: 0.08
+  custo_embalagem_brl: 1.20
+  limiar_frete_gratis_brl: 79.00
+  percentual_vendedor: 0.50
+  custo_acima_faixa_brl: 0.00
+  faixas:
+    - ate_kg: 0.3
+      custo_brl: 13.90
+    - ate_kg: 0.5
+      custo_brl: 15.90
+    - ate_kg: 1.0
+      custo_brl: 17.90
+    - ate_kg: 2.0
+      custo_brl: 20.90
+    - ate_kg: 5.0
+      custo_brl: 24.90
+    - ate_kg: 9.0
+      custo_brl: 32.90
+    - ate_kg: 13.0
+      custo_brl: 39.90
+    - ate_kg: 17.0
+      custo_brl: 47.90
+    - ate_kg: 30.0
+      custo_brl: 65.90
+

@@ -1,0 +1,10 @@
+2026-08-25 01:18:46,753 | DEBUG    | smartml.teste      | Mensagem DEBUG - so vai para o arquivo
+2026-08-25 01:18:46,754 | INFO     | smartml.teste      | Mensagem INFO - aparece nos dois
+2026-08-25 01:18:46,754 | WARNING  | smartml.teste      | Mensagem WARNING - algo merece atencao
+2026-08-25 01:18:46,755 | ERROR    | smartml.teste      | Mensagem ERROR - deu problema
+2026-08-25 01:18:46,755 | ERROR    | smartml.teste      | Erro capturado com rastreamento completo
+Traceback (most recent call last):
+  File "C:\Users\luizl\Documents\smartml_ultra\src\logger.py", line 70, in <module>
+    1 / 0
+    ~~^~~
+ZeroDivisionError: division by zero
