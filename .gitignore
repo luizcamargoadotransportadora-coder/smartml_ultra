@@ -1,4 +1,6 @@
-.venv/
+~$*.docx
 __pycache__/
 *.pyc
+.venv/
 .pytest_cache/
+*.log
