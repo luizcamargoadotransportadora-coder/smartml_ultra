@@ -1,0 +1,75 @@
+src\classificador.py:7:from dataclasses import dataclass
+src\classificador.py:14:class Faixa(str, Enum):
+src\classificador.py:31:@dataclass
+src\classificador.py:32:class Resultado:
+src\classificador.py:44:    def sinal(self) -> str:
+src\classificador.py:45:        return SINAIS[self.faixa]
+src\classificador.py:48:def analisar(
+src\classificador.py:70:    limite_boa = perf.margem_objetivo_pct * cfg.classificacao.fator_faixa_boa
+src\classificador.py:83:    return Resultado(
+src\precificador.py:7:from dataclasses import dataclass
+src\precificador.py:15:@dataclass
+src\precificador.py:16:class Alvo:
+src\precificador.py:24:@dataclass
+src\precificador.py:25:class SimulacaoModalidade:
+src\precificador.py:31:@dataclass
+src\precificador.py:32:class SimulacaoCompleta:
+src\precificador.py:41:def converter_para_brl(cfg: Configuracao, valor: float, moeda: str) -> float:
+src\precificador.py:45:        return valor
+src\precificador.py:52:    return bruto * (1 + cfg.cambio.spread_seguranca_pct)
+src\precificador.py:55:def arredondar(cfg: Configuracao, preco: float) -> float:
+src\precificador.py:56:    """Sobe o preco para o final psicologico definido no YAML."""
+src\precificador.py:62:    return round(candidato, 2)
+src\precificador.py:65:def _resolver_preco_com_frete(
+src\precificador.py:111:    return preco_final, round(lucro, 2), resultado_frete
+src\precificador.py:114:def simular(
+src\precificador.py:133:        "BOA": perf.margem_objetivo_pct * cfg.classificacao.fator_faixa_boa,
+src\precificador.py:169:    return SimulacaoCompleta(
+src\precificador.py:179:def imprimir_comparativo(cfg: Configuracao, sim: SimulacaoCompleta) -> None:
+src\frete.py:3:from dataclasses import dataclass, field
+src\frete.py:7:@dataclass
+src\frete.py:8:class ResultadoFrete:
+src\frete.py:19:    avisos: List[str] = field(default_factory=list)
+src\frete.py:21:    def resumo(self) -> str:
+src\frete.py:41:        return "\n".join(linhas)
+src\frete.py:44:class CalculadoraFrete:
+src\frete.py:47:    def __init__(self, config: Dict[str, Any]):
+src\frete.py:65:    def peso_cubado(self, comprimento_cm: float, largura_cm: float, altura_cm: float) -> float:
+src\frete.py:67:        return volume / self.divisor_cubagem
+src\frete.py:69:    def buscar_faixa(self, peso_kg: float):
+src\frete.py:72:                return float(faixa["ate_kg"]), float(faixa["custo_brl"])
+src\frete.py:73:        return None, None
+src\frete.py:76:    def calcular(
+src\frete.py:126:        return ResultadoFrete(
+src\frete.py:141:def _extrair_bloco_frete(config) -> dict:
+src\frete.py:172:    return bloco
+src\frete.py:175:def criar_calculadora(config=None) -> "CalculadoraFrete":
+src\frete.py:176:    return CalculadoraFrete({"frete": _extrair_bloco_frete(config)})
+src\modalidades.py:16:from dataclasses import dataclass, field
+src\modalidades.py:21:class Modalidade(str, Enum):
+src\modalidades.py:26:    def rotulo(self) -> str:
+src\modalidades.py:27:        return {
+src\modalidades.py:33:    def parcela_sem_juros(self) -> int:
+src\modalidades.py:34:        return 12 if self is Modalidade.ML_PREMIUM else 0
+src\modalidades.py:62:@dataclass
+src\modalidades.py:63:class PerfilModalidade:
+src\modalidades.py:67:    avisos: list = field(default_factory=list)
+src\modalidades.py:70:    def rotulo(self) -> str:
+src\modalidades.py:71:        return self.modalidade.rotulo
+src\modalidades.py:74:def _normalizar(categoria: str | None) -> str:
+src\modalidades.py:76:        return "geral"
+src\modalidades.py:77:    return str(categoria).strip().lower()
+src\modalidades.py:80:def comissao_de(categoria: str | None, modalidade: Modalidade) -> float:
+src\modalidades.py:93:        return COMISSAO_PADRAO[modalidade]
+src\modalidades.py:94:    return linha[modalidade]
+src\modalidades.py:97:def dentro_da_faixa_oficial(pct: float, modalidade: Modalidade) -> bool:
+src\modalidades.py:102:    return baixo <= round(pct, 4) <= alto
+src\modalidades.py:105:def perfil_modalidade(
+src\modalidades.py:138:    return PerfilModalidade(
+src\modalidades.py:146:def diferenca_premium_classico(categoria: str | None) -> float:
+src\modalidades.py:148:    return round(
+src\modalidades.py:155:def comparar_modalidades(categoria: str | None) -> Dict[str, float]:
+src\modalidades.py:157:    return {
+src\modalidades.py:158:        "classico_pct": comissao_de(categoria, Modalidade.ML_CLASSICO),
+src\modalidades.py:160:        "diferenca_pp": diferenca_premium_classico(categoria),
+src\modalidades.py:170:            f"{categoria:<16}{c['classico_pct']:>10.1%}"

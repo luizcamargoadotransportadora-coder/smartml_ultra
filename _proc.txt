@@ -1,0 +1,84 @@
+def processar(
+    cfg,
+    titulo: str,
+    custo: float,
+    moeda: str = "BRL",
+    categoria: Optional[str] = None,
+    peso_kg: float = 0.5,
+    comprimento_cm: float = 20.0,
+    largura_cm: float = 15.0,
+    altura_cm: float = 10.0,
+) -> AnaliseProduto:
+    """
+    Processa um produto de ponta a ponta.
+
+    1) Simula precos em todas as modalidades e faixas.
+    2) Classifica cada preco encontrado.
+    3) Escolhe a opcao recomendada.
+    """
+    sim = simular(
+        cfg,
+        titulo=titulo,
+        custo=custo,
+        moeda=moeda,
+        categoria=categoria,
+        peso_kg=peso_kg,
+        comprimento_cm=comprimento_cm,
+        largura_cm=largura_cm,
+        altura_cm=altura_cm,
+    )
+
+    opcoes: List[OpcaoPreco] = []
+
+    for modalidade in sim.modalidades.values():
+        rotulo_mod = getattr(modalidade.modalidade, "rotulo", str(modalidade.modalidade))
+
+        for alvo in modalidade.alvos.values():
+            # Confere o preco sugerido usando o classificador oficial
+            res: Resultado = analisar(
+                cfg,
+                titulo=titulo,
+                custo_produto_brl=sim.custo_brl,
+                preco_venda_brl=alvo.preco_sugerido_brl,
+                categoria=categoria,
+            )
+
+            opcoes.append(
+                OpcaoPreco(
+                    modalidade=rotulo_mod,
+                    comissao_pct=modalidade.comissao_pct,
+                    faixa=alvo.rotulo,
+                    preco_sugerido_brl=alvo.preco_sugerido_brl,
+                    lucro_brl=alvo.lucro_brl,
+                    margem_pct=alvo.margem_pct,
+                    frete_brl=_frete_do_alvo(alvo),
+                    classificacao=getattr(res.faixa, "value", str(res.faixa)),
+                    atende_lucro_minimo=res.atende_lucro_minimo,
+                )
+            )
+
+    # Recomendada: entre as que atendem o lucro minimo, a de menor preco.
+    # Se nenhuma atender, pega a de maior lucro absoluto.
+    validas = [o for o in opcoes if o.atende_lucro_minimo]
+    if validas:
+        recomendada = min(validas, key=lambda o: o.preco_sugerido_brl)
+    elif opcoes:
+        recomendada = max(opcoes, key=lambda o: o.lucro_brl)
+    else:
+        recomendada = None
+
+    avisos = _coletar_avisos(sim)
+    if not validas and opcoes:
+        avisos.append("Nenhuma opcao atinge o lucro minimo configurado.")
+
+    return AnaliseProduto(
+        titulo=sim.titulo,
+        categoria=sim.categoria,
+        moeda_origem=sim.moeda_origem,
+        custo_origem=sim.custo_origem,
+        custo_brl=sim.custo_brl,
+        opcoes=opcoes,
+        recomendada=recomendada,
+        avisos=avisos,
+    )
+

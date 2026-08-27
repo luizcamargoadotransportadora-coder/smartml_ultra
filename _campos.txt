@@ -1,0 +1,4 @@
+Resultado: ['titulo', 'categoria', 'custo_produto_brl', 'custo_total_brl', 'preco_venda_brl', 'lucro_brl', 'margem_pct', 'faixa', 'atende_lucro_minimo']
+Alvo: ['rotulo', 'margem_pct', 'preco_sugerido_brl', 'lucro_brl', 'resultado_frete']
+SimulacaoModalidade: ['modalidade', 'comissao_pct', 'alvos']
+SimulacaoCompleta: ['titulo', 'categoria', 'moeda_origem', 'custo_origem', 'custo_brl', 'modalidades']

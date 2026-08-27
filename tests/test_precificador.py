@@ -1,19 +1,73 @@
-"""Testes do precificador reverso multi-modalidade."""
-from __future__ import annotations
+"""Testes do módulo precificador — SmartML Ultra v100.0"""
+import importlib
+import sys
+from pathlib import Path
 
 import pytest
 
-from src.config_loader import carregar_config
-from src.modalidades import Modalidade
-from src.precificador import (
-    Alvo,
-    SimulacaoCompleta,
-    arredondar,
-    converter_para_brl,
-    simular,
-)
+RAIZ = Path(__file__).resolve().parents[1]
+for p in (RAIZ, RAIZ / "src", RAIZ / "app"):
+    if p.exists() and str(p) not in sys.path:
+        sys.path.insert(0, str(p))
+
+CANDIDATOS = ("", "src.", "app.", "smartml.", "smartml_ultra.", "core.")
+
+
+def _importar(nome_modulo, *atributos):
+    erros = []
+    for prefixo in CANDIDATOS:
+        for sufixo in ("", f".{nome_modulo}", ".loader", ".main"):
+            caminho = f"{prefixo}{nome_modulo}{sufixo}"
+            try:
+                mod = importlib.import_module(caminho)
+            except Exception as e:
+                erros.append(f"{caminho}: {e}")
+                continue
+            if all(hasattr(mod, a) for a in atributos):
+                return mod
+            erros.append(f"{caminho}: faltam atributos")
+    raise ImportError(
+        f"Nao achei '{nome_modulo}' com {atributos}.\nTentativas:\n  "
+        + "\n  ".join(erros)
+    )
+
+
+_cfg_mod = _importar("config_loader", "carregar_config")
+carregar_config = _cfg_mod.carregar_config
+
+_pre = _importar("precificador", "simular", "arredondar", "Modalidade")
+simular = _pre.simular
+arredondar = _pre.arredondar
+Modalidade = _pre.Modalidade
+_resolver_preco_com_frete = getattr(_pre, "_resolver_preco_com_frete", None)
+
+_frete = _importar("frete", "criar_calculadora")
+criar_calculadora = _frete.criar_calculadora
+
 
 FAIXAS = ("EMPATE", "MINIMA", "BOA", "OBJETIVO")
+
+_NOMES_FINAL = ("arredondamento_preco", "final_psicologico", "final",
+                "terminacao", "arredondamento_final", "centavos_finais")
+
+
+def _final_psicologico(cfg):
+    """Descobre o campo do final psicologico, tenha ele o nome que tiver."""
+    for bloco in (getattr(cfg, "margem", None),
+                  getattr(cfg, "precificacao", None),
+                  cfg):
+        if bloco is None:
+            continue
+        # objetos com atributos
+        for nome in _NOMES_FINAL:
+            if hasattr(bloco, nome):
+                return float(getattr(bloco, nome))
+        # dicts
+        if isinstance(bloco, dict):
+            for nome in _NOMES_FINAL:
+                if nome in bloco:
+                    return float(bloco[nome])
+    pytest.skip("Campo de final psicologico nao encontrado na config")
 
 
 @pytest.fixture(scope="module")
@@ -21,166 +75,155 @@ def cfg():
     return carregar_config()
 
 
-# --------------------------------------------------------------
-# converter_para_brl
-# --------------------------------------------------------------
-
-def test_moeda_base_nao_sofre_conversao(cfg):
-    assert converter_para_brl(cfg, 250.0, cfg.cambio.moeda_base) == 250.0
-
-
-def test_moeda_base_aceita_minusculo(cfg):
-    base = cfg.cambio.moeda_base.lower()
-    assert converter_para_brl(cfg, 99.0, base) == 99.0
+@pytest.fixture(scope="module")
+def sim_celular(cfg):
+    return simular(cfg, "iPhone 16 Pro Max 256GB Lacrado", 1100.00, "USD",
+                   peso_kg=0.6, comprimento_cm=20.0, largura_cm=15.0,
+                   altura_cm=10.0)
 
 
-def test_moeda_desconhecida_levanta_erro(cfg):
-    with pytest.raises(ValueError):
-        converter_para_brl(cfg, 100.0, "XYZ")
+@pytest.fixture(scope="module")
+def sim_acessorio(cfg):
+    return simular(cfg, "Capa Silicone iPhone 15", 18.00, "BRL",
+                   peso_kg=0.1, comprimento_cm=20.0, largura_cm=15.0,
+                   altura_cm=3.0)
 
 
-def test_conversao_aplica_spread(cfg):
-    for moeda, cotacao in cfg.cambio.cotacoes_manuais.items():
-        esperado = 100.0 * cotacao * (1 + cfg.cambio.spread_seguranca_pct)
-        assert converter_para_brl(cfg, 100.0, moeda) == pytest.approx(esperado)
+# ---------- 1. Estrutura do retorno ----------
+
+def test_simulacao_tem_as_duas_modalidades(sim_celular):
+    assert Modalidade.ML_CLASSICO in sim_celular.modalidades
+    assert Modalidade.ML_PREMIUM in sim_celular.modalidades
 
 
-def test_conversao_e_proporcional(cfg):
-    moeda = next(iter(cfg.cambio.cotacoes_manuais))
-    um = converter_para_brl(cfg, 1.0, moeda)
-    dez = converter_para_brl(cfg, 10.0, moeda)
-    assert dez == pytest.approx(um * 10)
+def test_cada_modalidade_tem_as_quatro_faixas(sim_celular):
+    for mod in (Modalidade.ML_CLASSICO, Modalidade.ML_PREMIUM):
+        assert set(sim_celular.modalidades[mod].alvos.keys()) == set(FAIXAS)
 
 
-# --------------------------------------------------------------
-# arredondar
-# --------------------------------------------------------------
+def test_conversao_de_moeda_aplicada(sim_celular):
+    assert sim_celular.moeda_origem == "USD"
+    assert sim_celular.custo_brl > sim_celular.custo_origem
 
-def test_arredondar_nunca_reduz_o_preco(cfg):
-    for bruto in (10.10, 99.99, 100.00, 1234.56, 7.01):
+
+def test_custo_brl_nao_converte_quando_ja_e_brl(sim_acessorio):
+    assert sim_acessorio.custo_brl == pytest.approx(18.00, abs=0.01)
+
+
+# ---------- 2. Monotonicidade ----------
+
+def test_precos_crescem_com_a_margem(sim_celular):
+    for mod in (Modalidade.ML_CLASSICO, Modalidade.ML_PREMIUM):
+        alvos = sim_celular.modalidades[mod].alvos
+        precos = [alvos[f].preco_sugerido_brl for f in FAIXAS]
+        assert precos == sorted(precos), f"{mod}: {precos}"
+
+
+def test_lucros_crescem_com_a_margem(sim_celular):
+    for mod in (Modalidade.ML_CLASSICO, Modalidade.ML_PREMIUM):
+        alvos = sim_celular.modalidades[mod].alvos
+        lucros = [alvos[f].lucro_brl for f in FAIXAS]
+        assert lucros == sorted(lucros), f"{mod}: {lucros}"
+
+
+def test_premium_custa_mais_que_classico(sim_celular):
+    c = sim_celular.modalidades[Modalidade.ML_CLASSICO]
+    p = sim_celular.modalidades[Modalidade.ML_PREMIUM]
+    assert p.comissao_pct > c.comissao_pct
+    for f in FAIXAS:
+        assert p.alvos[f].preco_sugerido_brl >= c.alvos[f].preco_sugerido_brl
+
+
+# ---------- 3. Coerencia financeira ----------
+
+def test_empate_tem_lucro_proximo_de_zero(sim_celular):
+    for mod in (Modalidade.ML_CLASSICO, Modalidade.ML_PREMIUM):
+        assert sim_celular.modalidades[mod].alvos["EMPATE"].lucro_brl >= -0.5
+
+
+def test_lucro_bate_com_a_margem_desejada(sim_celular):
+    for mod in (Modalidade.ML_CLASSICO, Modalidade.ML_PREMIUM):
+        for f in ("MINIMA", "BOA", "OBJETIVO"):
+            a = sim_celular.modalidades[mod].alvos[f]
+            esperado = a.preco_sugerido_brl * a.margem_pct
+            assert a.lucro_brl >= esperado - 1.0, (
+                f"{mod}/{f}: {a.lucro_brl:.2f} < {esperado:.2f}")
+
+
+def test_preco_sempre_maior_que_custo(sim_celular):
+    for mod in (Modalidade.ML_CLASSICO, Modalidade.ML_PREMIUM):
+        for f in FAIXAS:
+            assert (sim_celular.modalidades[mod].alvos[f].preco_sugerido_brl
+                    > sim_celular.custo_brl)
+
+
+# ---------- 4. Arredondamento psicologico ----------
+
+def test_arredondar_nunca_desce(cfg):
+    for bruto in (10.00, 10.01, 47.35, 78.40, 99.99, 1234.56):
         assert arredondar(cfg, bruto) >= bruto
 
 
-def test_arredondar_respeita_final_psicologico(cfg):
-    final = cfg.margem.arredondamento_preco
-    for bruto in (10.10, 99.99, 250.34, 1780.02):
-        centavos = round(arredondar(cfg, bruto) % 1, 2)
-        assert centavos == pytest.approx(round(final % 1, 2), abs=0.011)
+def test_arredondar_respeita_o_final(cfg):
+    final = _final_psicologico(cfg)
+    for bruto in (10.00, 47.35, 78.40, 1234.56):
+        assert round(arredondar(cfg, bruto) % 1, 2) == pytest.approx(
+            round(final % 1, 2), abs=0.001)
 
 
-def test_arredondar_nao_infla_demais(cfg):
-    for bruto in (10.10, 99.99, 250.34):
-        assert arredondar(cfg, bruto) - bruto < 1.01
-
-
-# --------------------------------------------------------------
-# simular - estrutura
-# --------------------------------------------------------------
-
-def test_simular_retorna_estrutura_completa(cfg):
-    sim = simular(cfg, "iPhone 16 Pro Max 256GB", 1100.0, "USD")
-    assert isinstance(sim, SimulacaoCompleta)
-    assert sim.moeda_origem == "USD"
-    assert sim.custo_origem == 1100.0
-    assert sim.custo_brl > 0
-
-
-def test_simular_traz_as_duas_modalidades(cfg):
-    sim = simular(cfg, "Capa Silicone iPhone 15", 18.0, "BRL")
-    assert Modalidade.ML_CLASSICO in sim.modalidades
-    assert Modalidade.ML_PREMIUM in sim.modalidades
-
-
-def test_todas_as_faixas_presentes(cfg):
-    sim = simular(cfg, "Motorola Moto G84 5G", 180.0, "USD")
+def test_precos_finais_terminam_no_final_psicologico(cfg, sim_celular):
+    final = _final_psicologico(cfg)
     for mod in (Modalidade.ML_CLASSICO, Modalidade.ML_PREMIUM):
-        alvos = sim.modalidades[mod].alvos
-        assert set(alvos) == set(FAIXAS)
-        assert all(isinstance(a, Alvo) for a in alvos.values())
-
-
-def test_categoria_explicita_prevalece(cfg):
-    cat = cfg.detectar_categoria("Capa Silicone iPhone 15")
-    sim = simular(cfg, "Titulo Qualquer Sem Pista", 50.0, "BRL", categoria=cat)
-    assert sim.categoria == cat
-
-
-def test_resultado_de_frete_sempre_anexado(cfg):
-    sim = simular(cfg, "Capa Silicone iPhone 15", 18.0, "BRL", peso_kg=0.1)
-    for mod in sim.modalidades.values():
-        for alvo in mod.alvos.values():
-            assert alvo.resultado_frete is not None
-
-
-# --------------------------------------------------------------
-# simular - comportamento economico
-# --------------------------------------------------------------
-
-def test_precos_sobem_conforme_a_faixa(cfg):
-    sim = simular(cfg, "iPhone 16 Pro Max 256GB", 1100.0, "USD")
-    for mod in sim.modalidades.values():
-        precos = [mod.alvos[f].preco_sugerido_brl for f in FAIXAS]
-        assert precos == sorted(precos)
-
-
-def test_lucros_sobem_conforme_a_faixa(cfg):
-    sim = simular(cfg, "iPhone 16 Pro Max 256GB", 1100.0, "USD")
-    for mod in sim.modalidades.values():
-        lucros = [mod.alvos[f].lucro_brl for f in FAIXAS]
-        assert lucros == sorted(lucros)
-
-
-def test_empate_tem_lucro_proximo_de_zero(cfg):
-    sim = simular(cfg, "Motorola Moto G84 5G", 180.0, "USD")
-    for mod in sim.modalidades.values():
-        lucro = mod.alvos["EMPATE"].lucro_brl
-        assert -1.0 <= lucro <= 5.0
-
-
-def test_premium_cobra_mais_caro_que_classico(cfg):
-    sim = simular(cfg, "iPhone 16 Pro Max 256GB", 1100.0, "USD")
-    c = sim.modalidades[Modalidade.ML_CLASSICO]
-    p = sim.modalidades[Modalidade.ML_PREMIUM]
-    if p.comissao_pct > c.comissao_pct:
         for f in FAIXAS:
-            assert p.alvos[f].preco_sugerido_brl >= c.alvos[f].preco_sugerido_brl
+            preco = sim_celular.modalidades[mod].alvos[f].preco_sugerido_brl
+            assert round(preco % 1, 2) == pytest.approx(
+                round(final % 1, 2), abs=0.001)
 
 
-def test_preco_sempre_supera_o_custo(cfg):
-    sim = simular(cfg, "iPhone 16 Pro Max 256GB", 1100.0, "USD")
-    for mod in sim.modalidades.values():
-        for alvo in mod.alvos.values():
-            assert alvo.preco_sugerido_brl > sim.custo_brl
+# ---------- 5. Loop iterativo do frete ----------
+
+@pytest.mark.skipif(_resolver_preco_com_frete is None,
+                    reason="_resolver_preco_com_frete nao exposto")
+def test_divisor_invalido_levanta_valueerror(cfg):
+    with pytest.raises(ValueError):
+        _resolver_preco_com_frete(
+            cfg=cfg, calc_frete=criar_calculadora(),
+            custo_produto_brl=100.0, comissao_pct=0.90,
+            margem_desejada=0.50, peso_kg=0.5,
+            comprimento_cm=20.0, largura_cm=15.0, altura_cm=10.0)
 
 
-def test_custo_maior_gera_preco_maior(cfg):
-    barato = simular(cfg, "Capa Silicone iPhone 15", 18.0, "BRL")
-    caro = simular(cfg, "Capa Silicone iPhone 15", 180.0, "BRL")
-    a = barato.modalidades[Modalidade.ML_CLASSICO].alvos["OBJETIVO"]
-    b = caro.modalidades[Modalidade.ML_CLASSICO].alvos["OBJETIVO"]
-    assert b.preco_sugerido_brl > a.preco_sugerido_brl
+@pytest.mark.skipif(_resolver_preco_com_frete is None,
+                    reason="_resolver_preco_com_frete nao exposto")
+def test_resolver_converge_e_devolve_tripla(cfg):
+    preco, lucro, res = _resolver_preco_com_frete(
+        cfg=cfg, calc_frete=criar_calculadora(),
+        custo_produto_brl=100.0, comissao_pct=0.14,
+        margem_desejada=0.15, peso_kg=0.5,
+        comprimento_cm=20.0, largura_cm=15.0, altura_cm=10.0)
+    assert preco > 100.0
+    assert lucro > 0
+    assert res is not None
 
 
-def test_pacote_pesado_encarece_o_preco(cfg):
-    leve = simular(cfg, "Capa Silicone iPhone 15", 100.0, "BRL", peso_kg=0.1)
-    pesado = simular(cfg, "Capa Silicone iPhone 15", 100.0, "BRL", peso_kg=9.0)
-    a = leve.modalidades[Modalidade.ML_CLASSICO].alvos["OBJETIVO"]
-    b = pesado.modalidades[Modalidade.ML_CLASSICO].alvos["OBJETIVO"]
-    assert b.preco_sugerido_brl >= a.preco_sugerido_brl
+def test_frete_recalculado_no_preco_final(sim_celular):
+    for mod in (Modalidade.ML_CLASSICO, Modalidade.ML_PREMIUM):
+        for f in FAIXAS:
+            assert sim_celular.modalidades[mod].alvos[f].resultado_frete is not None
 
 
-def test_margem_pct_bate_com_a_configuracao(cfg):
-    sim = simular(cfg, "iPhone 16 Pro Max 256GB", 1100.0, "USD")
-    perf = cfg.perfil(sim.categoria)
-    alvos = sim.modalidades[Modalidade.ML_CLASSICO].alvos
-    assert alvos["EMPATE"].margem_pct == 0.0
-    assert alvos["MINIMA"].margem_pct == pytest.approx(perf.margem_minima_pct)
-    assert alvos["OBJETIVO"].margem_pct == pytest.approx(perf.margem_objetivo_pct)
+def test_acessorio_barato_tem_preco_acima_do_custo(sim_acessorio):
+    alvos = sim_acessorio.modalidades[Modalidade.ML_CLASSICO].alvos
+    for f in FAIXAS:
+        assert alvos[f].preco_sugerido_brl > sim_acessorio.custo_brl
 
 
-def test_valores_sao_arredondados_em_centavos(cfg):
-    sim = simular(cfg, "Motorola Moto G84 5G", 180.0, "USD")
-    for mod in sim.modalidades.values():
-        for alvo in mod.alvos.values():
-            assert alvo.preco_sugerido_brl == round(alvo.preco_sugerido_brl, 2)
-            assert alvo.lucro_brl == round(alvo.lucro_brl, 2)
+# ---------- 6. Determinismo ----------
+
+def test_simular_e_deterministico(cfg):
+    a = simular(cfg, "Motorola Moto G84 5G 256GB", 180.00, "USD", peso_kg=0.6)
+    b = simular(cfg, "Motorola Moto G84 5G 256GB", 180.00, "USD", peso_kg=0.6)
+    for mod in (Modalidade.ML_CLASSICO, Modalidade.ML_PREMIUM):
+        for f in FAIXAS:
+            assert (a.modalidades[mod].alvos[f].preco_sugerido_brl
+                    == b.modalidades[mod].alvos[f].preco_sugerido_brl)

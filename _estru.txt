@@ -1,0 +1,45 @@
+@dataclass
+class Alvo:
+    rotulo: str
+    margem_pct: float
+    preco_sugerido_brl: float
+    lucro_brl: float
+    resultado_frete: Optional[ResultadoFrete] = None
+@dataclass
+class SimulacaoModalidade:
+    modalidade: Modalidade
+    comissao_pct: float
+    alvos: Dict[str, Alvo]
+@dataclass
+class SimulacaoCompleta:
+    titulo: str
+    categoria: str
+    moeda_origem: str
+    custo_origem: float
+    custo_brl: float
+    modalidades: Dict[Modalidade, SimulacaoModalidade]
+def converter_para_brl(cfg: Configuracao, valor: float, moeda: str) -> float:
+def arredondar(cfg: Configuracao, preco: float) -> float:
+def _resolver_preco_com_frete(
+    cfg: Configuracao,
+    calc_frete: CalculadoraFrete,
+    custo_produto_brl: float,
+    comissao_pct: float,
+    margem_desejada: float,
+    peso_kg: float,
+    comprimento_cm: float,
+    largura_cm: float,
+    altura_cm: float,
+def simular(
+    cfg: Configuracao,
+    titulo: str,
+    custo: float,
+    moeda: str = "BRL",
+    categoria: Optional[str] = None,
+    peso_kg: float = 0.5,
+    comprimento_cm: float = 20.0,
+    largura_cm: float = 15.0,
+    altura_cm: float = 10.0,
+    modalidades_simuladas: Dict[Modalidade, SimulacaoModalidade] = {}
+        alvos: Dict[str, Alvo] = {}
+def imprimir_comparativo(cfg: Configuracao, sim: SimulacaoCompleta) -> None:

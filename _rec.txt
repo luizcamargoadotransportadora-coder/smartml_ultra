@@ -1,0 +1,76 @@
+"""
+motor.py - Orquestrador central do SmartML Ultra v100.0
+
+Recebe os dados de um produto e devolve um resultado consolidado,
+juntando precificacao reversa, modalidades, frete e classificacao.
+
+Este e o modulo que a interface (AppSheet/CLI) vai consumir.
+"""
+
+from dataclasses import dataclass, field, asdict
+from typing import Any, Dict, List, Optional
+
+from precificador import simular, SimulacaoCompleta
+from classificador import analisar, Resultado
+
+
+# ---------------------------------------------------------------
+# Estruturas de saida
+# ---------------------------------------------------------------
+
+@dataclass
+class OpcaoPreco:
+    """Uma combinacao concreta: modalidade + faixa de margem."""
+    modalidade: str
+    comissao_pct: float
+    faixa: str
+    preco_sugerido_brl: float
+    lucro_brl: float
+    margem_pct: float
+    frete_brl: float
+    classificacao: str
+    atende_lucro_minimo: bool
+
+
+@dataclass
+class AnaliseProduto:
+    """Resultado consolidado de um produto."""
+    titulo: str
+    categoria: Optional[str]
+    moeda_origem: str
+    custo_origem: float
+    custo_brl: float
+    opcoes: List[OpcaoPreco] = field(default_factory=list)
+    recomendada: Optional[OpcaoPreco] = None
+    avisos: List[str] = field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Converte para dicionario puro - pronto para JSON/AppSheet."""
+        return asdict(self)
+
+
+# ---------------------------------------------------------------
+# Funcoes auxiliares
+# ---------------------------------------------------------------
+
+def _frete_do_alvo(alvo) -> float:
+    """Extrai o custo de frete de um alvo, de forma tolerante."""
+    rf = getattr(alvo, "resultado_frete", None)
+    if rf is None:
+        return 0.0
+    for nome in ("custo_vendedor_brl", "custo_total_brl", "custo_brl", "valor_brl"):
+        valor = getattr(rf, nome, None)
+        if valor is not None:
+            return float(valor)
+    return 0.0
+
+
+def _coletar_avisos(sim: SimulacaoCompleta) -> List[str]:
+    """Junta avisos vindos do calculo de frete, sem repetir."""
+    avisos: List[str] = []
+    for modalidade in sim.modalidades.values():
+        for alvo in modalidade.alvos.values():
+            rf = getattr(alvo, "resultado_frete", None)
+            for aviso in getattr(rf, "avisos", []) or []:
+                if aviso not in avisos:
+                   

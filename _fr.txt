@@ -1,0 +1,25 @@
+def _frete_do_alvo(alvo) -> float:
+    """Extrai o custo de frete de um alvo, de forma tolerante."""
+    rf = getattr(alvo, "resultado_frete", None)
+    if rf is None:
+        return 0.0
+    for nome in ("custo_brl", "custo_final_brl", "valor_brl", "custo"):
+        valor = getattr(rf, nome, None)
+        if valor is not None:
+            return float(valor)
+    return 0.0
+
+
+def _coletar_avisos(sim: SimulacaoCompleta) -> List[str]:
+    """Junta avisos vindos do calculo de frete, sem repetir."""
+    avisos: List[str] = []
+    for modalidade in sim.modalidades.values():
+        for alvo in modalidade.alvos.values():
+            rf = getattr(alvo, "resultado_frete", None)
+            for aviso in getattr(rf, "avisos", []) or []:
+                if aviso not in avisos:
+                    avisos.append(aviso)
+    return avisos
+
+
+# -------------------------------------------------------------

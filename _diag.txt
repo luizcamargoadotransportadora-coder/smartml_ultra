@@ -1,0 +1,216 @@
+=== MOTOR 100-140 ===
+    3) Escolhe a opcao recomendada.
+    """
+    sim = simular(
+        cfg,
+        titulo=titulo,
+        custo=custo,
+        moeda=moeda,
+        categoria=categoria,
+        peso_kg=peso_kg,
+        comprimento_cm=comprimento_cm,
+        largura_cm=largura_cm,
+        altura_cm=altura_cm,
+    )
+
+    opcoes: List[OpcaoPreco] = []
+
+    for modalidade in sim.modalidades:
+        rotulo_mod = getattr(modalidade, "rotulo", str(modalidade))
+
+        for alvo in modalidade.alvos:
+            # Confere o preco sugerido usando o classificador oficial
+            res: Resultado = analisar(
+                cfg,
+                titulo=titulo,
+                custo_produto_brl=sim.custo_brl,
+                preco_venda_brl=alvo.preco_sugerido_brl,
+                categoria=categoria,
+            )
+
+            opcoes.append(
+                OpcaoPreco(
+                    modalidade=rotulo_mod,
+                    comissao_pct=modalidade.comissao_pct,
+                    faixa=alvo.rotulo,
+                    preco_sugerido_brl=alvo.preco_sugerido_brl,
+                    lucro_brl=alvo.lucro_brl,
+                    margem_pct=alvo.margem_pct,
+                    frete_brl=_frete_do_alvo(alvo),
+                    classificacao=getattr(res.faixa, "value", str(res.faixa)),
+                    atende_lucro_minimo=res.atende_lucro_minimo,
+                )
+
+=== MODALIDADES ===
+"""
+SmartML Ultra v100.0 - Modalidades de anuncio por canal.
+
+Fonte das faixas (Mercado Livre, 2026):
+  Classico : 10% a 14% - sem parcelamento sem juros
+  Premium  : 15% a 19% - parcelamento 12x sem juros + exposicao
+
+Regra dos R$ 79 (excludente):
+  abaixo  -> comissao + custo por unidade (peso/dimensao)
+  acima   -> comissao + parte do frete gratis
+  Nunca as duas juntas. Quem resolve isso e o modulo frete.py.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from enum import Enum
+from typing import Dict
+
+
+class Modalidade(str, Enum):
+    ML_CLASSICO = "ML_CLASSICO"
+    ML_PREMIUM = "ML_PREMIUM"
+
+    @property
+    def rotulo(self) -> str:
+        return {
+            "ML_CLASSICO": "Classico",
+            "ML_PREMIUM": "Premium",
+        }[self.value]
+
+    @property
+    def parcela_sem_juros(self) -> int:
+        return 12 if self is Modalidade.ML_PREMIUM else 0
+
+
+# Comissao por categoria e modalidade.
+# Ajuste conforme o Simulador de Custos oficial da sua conta.
+TABELA_COMISSAO: Dict[str, Dict[Modalidade, float]] = {
+    "celular": {Modalidade.ML_CLASSICO: 0.115, Modalidade.ML_PREMIUM: 0.165},
+    "informatica": {Modalidade.ML_CLASSICO: 0.115, Modalidade.ML_PREMIUM: 0.165},
+    "eletronico": {Modalidade.ML_CLASSICO: 0.120, Modalidade.ML_PREMIUM: 0.170},
+    "audio": {Modalidade.ML_CLASSICO: 0.130, Modalidade.ML_PREMIUM: 0.180},
+    "acessorio": {Modalidade.ML_CLASSICO: 0.140, Modalidade.ML_PREMIUM: 0.190},
+    "casa": {Modalidade.ML_CLASSICO: 0.135, Modalidade.ML_PREMIUM: 0.185},
+    "geral": {Modalidade.ML_CLASSICO: 0.130, Modalidade.ML_PREMIUM: 0.165},
+}
+
+COMISSAO_PADRAO: Dict[Modalidade, float] = {
+    Modalidade.ML_CLASSICO: 0.130,
+    Modalidade.ML_PREMIUM: 0.165,
+}
+
+# Limites de sanidade oficiais do ML.
+LIMITE_CLASSICO = (0.10, 0.14)
+LIMITE_PREMIUM = (0.15, 0.19)
+
+# Abaixo deste ticket, o Premium raramente se paga.
+TICKET_MINIMO_PREMIUM_BRL = 200.00
+
+
+@dataclass
+class PerfilModalidade:
+    modalidade: Modalidade
+    categoria: str
+    comissao_pct: float
+    avisos: list = field(default_factory=list)
+
+    @property
+    def rotulo(self) -> str:
+        return self.modalidade.rotulo
+
+
+def _normalizar(categoria: str | None) -> str:
+    if not categoria:
+        return "geral"
+    return str(categoria).strip().lower()
+
+
+def comissao_de(categoria: str | None, modalidade: Modalidade) -> float:
+    """Devolve a comissao decimal da categoria na modalidade informada."""
+    if not isinstance(modalidade, Modalidade):
+        modalidade = Modalidade(str(modalidade).upper())
+
+    cat = _normalizar(categoria)
+    linha = TABELA_COMISSAO.get(cat)
+    if linha is None:
+        for chave, valores in TABELA_COMISSAO.items():
+            if chave in cat or cat in chave:
+                linha = valores
+                break
+    if linha is None:
+        return COMISSAO_PADRAO[modalidade]
+    return linha[modalidade]
+
+
+def dentro_da_faixa_oficial(pct: float, modalidade: Modalidade) -> bool:
+    """Confere se a comissao respeita a faixa publicada pelo ML."""
+    baixo, alto = (
+        LIMITE_PREMIUM if modalidade is Modalidade.ML_PREMIUM else LIMITE_CLASSICO
+    )
+    return baixo <= round(pct, 4) <= alto
+
+
+def perfil_modalidade(
+    categoria: str | None,
+    modalidade: Modalidade,
+    preco_referencia_brl: float | None = None,
+) -> PerfilModalidade:
+    """Monta o perfil de comissao com avisos de coerencia."""
+    if not isinstance(modalidade, Modalidade):
+        modalidade = Modalidade(str(modalidade).upper())
+
+    cat = _normalizar(categoria)
+    pct = comissao_de(cat, modalidade)
+    avisos: list = []
+
+    if cat not in TABELA_COMISSAO:
+        avisos.append(
+            f"Categoria '{cat}' fora da tabela: usando referencia padrao."
+        )
+
+    if not dentro_da_faixa_oficial(pct, modalidade):
+        avisos.append(
+            f"Comissao {pct:.1%} fora da faixa oficial do {modalidade.rotulo}."
+        )
+
+    if (
+        modalidade is Modalidade.ML_PREMIUM
+        and preco_referencia_brl is not None
+        and preco_referencia_brl < TICKET_MINIMO_PREMIUM_BRL
+    ):
+        avisos.append(
+            f"Ticket abaixo de R$ {TICKET_MINIMO_PREMIUM_BRL:,.2f}: "
+            "o Classico costuma preservar mais margem."
+        )
+
+    return PerfilModalidade(
+        modalidade=modalidade,
+        categoria=cat,
+        comissao_pct=pct,
+        avisos=avisos,
+    )
+
+
+def diferenca_premium_classico(categoria: str | None) -> float:
+    """Quantos pontos percentuais o Premium custa a mais."""
+    return round(
+        comissao_de(categoria, Modalidade.ML_PREMIUM)
+        - comissao_de(categoria, Modalidade.ML_CLASSICO),
+        4,
+    )
+
+
+def comparar_modalidades(categoria: str | None) -> Dict[str, float]:
+    """Resumo rapido das duas modalidades para uma categoria."""
+    return {
+        "classico_pct": comissao_de(categoria, Modalidade.ML_CLASSICO),
+        "premium_pct": comissao_de(categoria, Modalidade.ML_PREMIUM),
+        "diferenca_pp": diferenca_premium_classico(categoria),
+    }
+
+
+if __name__ == "__main__":
+    print(f"{'CATEGORIA':<16}{'CLASSICO':>11}{'PREMIUM':>11}{'DELTA':>9}")
+    print("-" * 47)
+    for categoria in TABELA_COMISSAO:
+        c = comparar_modalidades(categoria)
+        print(
+            f"{categoria:<16}{c['classico_pct']:>10.1%}"
+            f"{c['premium_pct']:>11.1%}{c['diferenca_pp']:>9.1%}"
+        )

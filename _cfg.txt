@@ -1,0 +1,39 @@
+src\classificador.py:44:    def sinal(self) -> str:
+src\classificador.py:48:def analisar(
+src\config_loader.py:34:    def total_pct(self) -> float:
+src\config_loader.py:42:    def total_fixo_brl(self) -> float:
+src\config_loader.py:107:    def perfil(self, nome: str) -> PerfilCategoria:
+src\config_loader.py:113:    def detectar_categoria(self, titulo: str) -> str:
+src\config_loader.py:131:def carregar_config(caminho: Path | str | None = None) -> Configuracao:
+src\frete.py:19:    avisos: List[str] = field(default_factory=list)
+src\frete.py:21:    def resumo(self) -> str:
+src\frete.py:47:    def __init__(self, config: Dict[str, Any]):
+src\frete.py:65:    def peso_cubado(self, comprimento_cm: float, largura_cm: float, altura_cm: float) -> float:
+src\frete.py:69:    def buscar_faixa(self, peso_kg: float):
+src\frete.py:76:    def calcular(
+src\frete.py:141:def _extrair_bloco_frete(config) -> dict:
+src\frete.py:175:def criar_calculadora(config=None) -> "CalculadoraFrete":
+src\logger.py:26:def obter_logger(
+src\modalidades.py:26:    def rotulo(self) -> str:
+src\modalidades.py:33:    def parcela_sem_juros(self) -> int:
+src\modalidades.py:67:    avisos: list = field(default_factory=list)
+src\modalidades.py:70:    def rotulo(self) -> str:
+src\modalidades.py:74:def _normalizar(categoria: str | None) -> str:
+src\modalidades.py:80:def comissao_de(categoria: str | None, modalidade: Modalidade) -> float:
+src\modalidades.py:97:def dentro_da_faixa_oficial(pct: float, modalidade: Modalidade) -> bool:
+src\modalidades.py:105:def perfil_modalidade(
+src\modalidades.py:146:def diferenca_premium_classico(categoria: str | None) -> float:
+src\modalidades.py:155:def comparar_modalidades(categoria: str | None) -> Dict[str, float]:
+src\motor.py:43:    opcoes: List[OpcaoPreco] = field(default_factory=list)
+src\motor.py:45:    avisos: List[str] = field(default_factory=list)
+src\motor.py:47:    def to_dict(self) -> Dict[str, Any]:
+src\motor.py:56:def _frete_do_alvo(alvo) -> float:
+src\motor.py:68:def _coletar_avisos(sim: SimulacaoCompleta) -> List[str]:
+src\motor.py:84:def processar(
+src\motor.py:169:def processar_lote(cfg, produtos: List[Dict[str, Any]]) -> List[AnaliseProduto]:
+src\precificador.py:41:def converter_para_brl(cfg: Configuracao, valor: float, moeda: str) -> float:
+src\precificador.py:55:def arredondar(cfg: Configuracao, preco: float) -> float:
+src\precificador.py:56:    """Sobe o preco para o final psicologico definido no YAML."""
+src\precificador.py:65:def _resolver_preco_com_frete(
+src\precificador.py:114:def simular(
+src\precificador.py:179:def imprimir_comparativo(cfg: Configuracao, sim: SimulacaoCompleta) -> None:
