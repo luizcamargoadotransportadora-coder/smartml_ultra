@@ -1,5 +1,5 @@
 """
-SmartML Ultra - Módulo de Scraper e Auditoria de Precisão (NLP) + Busca em Cascata
+SmartML Ultra - Módulo de Scraper e Auditoria de Precisão (NLP) + Extrator de URLs
 """
 import re
 import unicodedata
@@ -17,7 +17,7 @@ TERMOS_EXCLUIDOS_CONDICAO = [
 
 PALAVRAS_EXCLUIDAS_ACESSORIOS = [
     "capa", "capinha", "película", "pelicula", "cabo", "case", "suporte",
-    "carregador", "proteção", "protecao", "vidro", "defeito", "peças"
+    "carregador", "proteção", "protecao", "vidro", "defeito", "peças", "caixa vazia"
 ]
 
 MAPA_CORES = {
@@ -44,12 +44,6 @@ class AuditorIAUltra:
             if termo_ruim in titulo_norm:
                 return {"aprovado": False, "motivo": f"Item Não-Novo"}
 
-        nums_termo = re.findall(r'\b\d+\b', termo_norm)
-        for num in nums_termo:
-            if len(num) >= 2 or num in ["5", "4", "3"]:
-                if num not in titulo_norm:
-                    return {"aprovado": False, "motivo": f"Falta '{num}'"}
-
         for cor_chave, variacoes in MAPA_CORES.items():
             if cor_chave in termo_norm or any(v in termo_norm for v in variacoes):
                 todas = [cor_chave] + variacoes
@@ -66,11 +60,39 @@ def buscar_menor_preco_ml(termo_busca: str, custo_compra: float = 0.0) -> Dict:
     termo_base = str(termo_busca).strip()
     
     # ==========================================
-    # 1. MODO SNIPER (FALLBACK PARA LINKS/ID)
+    # 1. TRATAMENTO DE LINKS E MODO SNIPER
     # ==========================================
-    match_mlb = re.search(r'MLB[-_]?\s*(\d+)', termo_base, re.IGNORECASE)
-    if match_mlb:
-        mlb_id = f"MLB{match_mlb.group(1)}"
+    if "mercadolivre.com.br" in termo_base:
+        # Tenta pegar Anuncio Exato (MLB-123456)
+        match_item = re.search(r'MLB[-_](\d+)', termo_base, re.IGNORECASE)
+        if match_item:
+            mlb_id = f"MLB{match_item.group(1)}"
+            url_item = f"https://api.mercadolibre.com/items/{mlb_id}"
+            try:
+                req = urllib.request.Request(url_item, headers={'User-Agent': 'Mozilla/5.0'})
+                with urllib.request.urlopen(req, timeout=10) as response:
+                    if response.status == 200:
+                        item = json.loads(response.read().decode('utf-8'))
+                        preco = float(item.get('price', 0.0))
+                        if preco > 0:
+                            return {
+                                "encontrado": True, "menor_preco": preco,
+                                "link": item.get('permalink', '').split('?')[0],
+                                "titulo_encontrado": item.get('title', ''),
+                                "auditoria_ia": "🎯 Anúncio Exato (Sniper)"
+                            }
+            except Exception:
+                pass
+        
+        # Se for link de Catálogo (/p/MLB), ele extrai o nome do produto da URL para buscar!
+        match_slug = re.search(r'mercadolivre\.com\.br/([^/]+)', termo_base)
+        if match_slug:
+            slug = match_slug.group(1).replace("-", " ")
+            if "MLB" not in slug: 
+                termo_base = slug # "apple iphone 15 pro max..."
+
+    elif re.match(r'^MLB\d+$', termo_base, re.IGNORECASE):
+        mlb_id = termo_base.upper()
         url_item = f"https://api.mercadolibre.com/items/{mlb_id}"
         try:
             req = urllib.request.Request(url_item, headers={'User-Agent': 'Mozilla/5.0'})
@@ -86,26 +108,27 @@ def buscar_menor_preco_ml(termo_busca: str, custo_compra: float = 0.0) -> Dict:
                             "auditoria_ia": "🎯 Anúncio Exato (Sniper)"
                         }
         except Exception:
-            pass # Se o ID falhar, segue para a busca por texto
+            return {"encontrado": False}
 
     # ==========================================
-    # 2. BUSCA NORMAL EM CASCATA (TEXTO)
+    # 2. BUSCA NORMAL EM CASCATA (POR RELEVÂNCIA)
     # ==========================================
-    # Limpa pontuações que quebram o ML
     termo_limpo = re.sub(r'[-–—_+,;:\(\)\[\]\/\*]', ' ', termo_base)
     palavras = [p for p in termo_limpo.split() if p]
 
-    # Cria as tentativas de busca (do mais específico ao mais genérico)
     tentativas = [
-        termo_base,                    # 1. Exatamente como digitou
-        " ".join(palavras[:6]),        # 2. Seis primeiras palavras
-        " ".join(palavras[:4])         # 3. Quatro primeiras palavras
+        termo_base,                    
+        " ".join(palavras[:6]),        
+        " ".join(palavras[:4])         
     ]
 
     for tentativa in tentativas:
         if not tentativa.strip(): continue
         
-        url_api = f"https://api.mercadolibre.com/sites/MLB/search?q={urllib.parse.quote(tentativa)}&sort=price_asc"
+        # BURACO DO ML RESOLVIDO: Busca sem "sort=price_asc". O ML traz as relevâncias,
+        # e nós mesmos ordenamos as opções válidas pelo menor preço no Python!
+        url_api = f"https://api.mercadolibre.com/sites/MLB/search?q={urllib.parse.quote(tentativa)}"
+        
         try:
             req = urllib.request.Request(url_api, headers={'User-Agent': 'Mozilla/5.0'})
             with urllib.request.urlopen(req, timeout=10) as response:
@@ -120,10 +143,8 @@ def buscar_menor_preco_ml(termo_busca: str, custo_compra: float = 0.0) -> Dict:
                         link = item.get('permalink', '').split('?')[0]
                         titulo = item.get('title', '')
                         
-                        # Trava contra acessórios muito baratos
                         if custo_compra > 0 and preco < (custo_compra * 0.40): continue
 
-                        # A IA sempre audita contra o termo_base original para garantir a precisão
                         parecer = AuditorIAUltra.auditar(termo_base, titulo)
                         if not parecer["aprovado"]: continue
 
@@ -143,6 +164,6 @@ def buscar_menor_preco_ml(termo_busca: str, custo_compra: float = 0.0) -> Dict:
                         }
         except Exception as e:
             print(f"Erro na busca API ML: {e}")
-            continue # Tenta o próximo nível da cascata
+            continue 
 
     return {"encontrado": False}
