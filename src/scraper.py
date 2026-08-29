@@ -1,5 +1,5 @@
 """
-SmartML Ultra - Módulo de Scraper e Auditoria de Precisão (NLP) + Modo Sniper
+SmartML Ultra - Módulo de Scraper e Auditoria de Precisão (NLP) + Busca em Cascata
 """
 import re
 import unicodedata
@@ -66,8 +66,7 @@ def buscar_menor_preco_ml(termo_busca: str, custo_compra: float = 0.0) -> Dict:
     termo_base = str(termo_busca).strip()
     
     # ==========================================
-    # 1. MODO SNIPER (BURLA O BUSCADOR DO ML)
-    # Lê links diretos ou códigos como MLB123456
+    # 1. MODO SNIPER (FALLBACK PARA LINKS/ID)
     # ==========================================
     match_mlb = re.search(r'MLB[-_]?\s*(\d+)', termo_base, re.IGNORECASE)
     if match_mlb:
@@ -81,53 +80,69 @@ def buscar_menor_preco_ml(termo_busca: str, custo_compra: float = 0.0) -> Dict:
                     preco = float(item.get('price', 0.0))
                     if preco > 0:
                         return {
-                            "encontrado": True,
-                            "menor_preco": preco,
+                            "encontrado": True, "menor_preco": preco,
                             "link": item.get('permalink', '').split('?')[0],
                             "titulo_encontrado": item.get('title', ''),
-                            "auditoria_ia": "🎯 Anúncio Exato (Modo Sniper)"
+                            "auditoria_ia": "🎯 Anúncio Exato (Sniper)"
+                        }
+        except Exception:
+            pass # Se o ID falhar, segue para a busca por texto
+
+    # ==========================================
+    # 2. BUSCA NORMAL EM CASCATA (TEXTO)
+    # ==========================================
+    # Limpa pontuações que quebram o ML
+    termo_limpo = re.sub(r'[-–—_+,;:\(\)\[\]\/\*]', ' ', termo_base)
+    palavras = [p for p in termo_limpo.split() if p]
+
+    # Cria as tentativas de busca (do mais específico ao mais genérico)
+    tentativas = [
+        termo_base,                    # 1. Exatamente como digitou
+        " ".join(palavras[:6]),        # 2. Seis primeiras palavras
+        " ".join(palavras[:4])         # 3. Quatro primeiras palavras
+    ]
+
+    for tentativa in tentativas:
+        if not tentativa.strip(): continue
+        
+        url_api = f"https://api.mercadolibre.com/sites/MLB/search?q={urllib.parse.quote(tentativa)}&sort=price_asc"
+        try:
+            req = urllib.request.Request(url_api, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=10) as response:
+                if response.status == 200:
+                    dados = json.loads(response.read().decode('utf-8'))
+                    results = dados.get('results', [])
+                    
+                    candidatos_validos = []
+                    for item in results:
+                        if item.get('condition') != 'new': continue
+                        preco = float(item.get('price', 0.0))
+                        link = item.get('permalink', '').split('?')[0]
+                        titulo = item.get('title', '')
+                        
+                        # Trava contra acessórios muito baratos
+                        if custo_compra > 0 and preco < (custo_compra * 0.40): continue
+
+                        # A IA sempre audita contra o termo_base original para garantir a precisão
+                        parecer = AuditorIAUltra.auditar(termo_base, titulo)
+                        if not parecer["aprovado"]: continue
+
+                        candidatos_validos.append({
+                            "preco": preco, "link": link, "titulo": titulo, "auditoria": parecer["motivo"]
+                        })
+
+                    if candidatos_validos:
+                        candidatos_validos.sort(key=lambda x: x["preco"])
+                        melhor = candidatos_validos[0]
+                        return {
+                            "encontrado": True,
+                            "menor_preco": melhor["preco"],
+                            "link": melhor["link"],
+                            "titulo_encontrado": melhor["titulo"],
+                            "auditoria_ia": melhor["auditoria"]
                         }
         except Exception as e:
-            return {"encontrado": False} # Falhou a leitura do link
-
-    # ==========================================
-    # 2. BUSCA NORMAL (TEXTO)
-    # ==========================================
-    url_api = f"https://api.mercadolibre.com/sites/MLB/search?q={urllib.parse.quote(termo_base)}&sort=price_asc"
-    try:
-        req = urllib.request.Request(url_api, headers={'User-Agent': 'Mozilla/5.0'})
-        with urllib.request.urlopen(req, timeout=10) as response:
-            if response.status == 200:
-                dados = json.loads(response.read().decode('utf-8'))
-                results = dados.get('results', [])
-                
-                candidatos_validos = []
-                for item in results:
-                    if item.get('condition') != 'new': continue
-                    preco = float(item.get('price', 0.0))
-                    link = item.get('permalink', '').split('?')[0]
-                    titulo = item.get('title', '')
-                    
-                    if custo_compra > 0 and preco < (custo_compra * 0.40): continue
-
-                    parecer = AuditorIAUltra.auditar(termo_base, titulo)
-                    if not parecer["aprovado"]: continue
-
-                    candidatos_validos.append({
-                        "preco": preco, "link": link, "titulo": titulo, "auditoria": parecer["motivo"]
-                    })
-
-                if candidatos_validos:
-                    candidatos_validos.sort(key=lambda x: x["preco"])
-                    melhor = candidatos_validos[0]
-                    return {
-                        "encontrado": True,
-                        "menor_preco": melhor["preco"],
-                        "link": melhor["link"],
-                        "titulo_encontrado": melhor["titulo"],
-                        "auditoria_ia": melhor["auditoria"]
-                    }
-    except Exception as e:
-        print(f"Erro na busca API ML: {e}")
+            print(f"Erro na busca API ML: {e}")
+            continue # Tenta o próximo nível da cascata
 
     return {"encontrado": False}
