@@ -1,11 +1,11 @@
 """
-SmartML Ultra - Scraper Definitivo com Busca em Cascata Multi-Tier
+SmartML Ultra - Módulo de Scraper Definitivo (Busca Robusta e Tolerante a Ruídos)
 """
 import re
 import urllib.request
 import urllib.parse
 import json
-from typing import Dict
+from typing import Dict, Optional
 
 def buscar_menor_preco_ml(termo_busca: str, custo_compra: float = 0.0) -> Dict:
     termo_base = str(termo_busca).strip()
@@ -14,7 +14,9 @@ def buscar_menor_preco_ml(termo_busca: str, custo_compra: float = 0.0) -> Dict:
         "Accept": "application/json"
     }
     
-    # 1. MODO SNIPER (Links Diretos ou IDs MLB exatos)
+    # ==========================================
+    # 1. MODO SNIPER (Links Diretos ou IDs MLB)
+    # ==========================================
     match_item = re.search(r'MLB[-_]?(\d+)', termo_base, re.IGNORECASE)
     if "mercadolivre.com.br" in termo_base or match_item:
         if match_item:
@@ -36,29 +38,32 @@ def buscar_menor_preco_ml(termo_busca: str, custo_compra: float = 0.0) -> Dict:
                                 "titulo_encontrado": titulo_real,
                                 "auditoria_ia": "🎯 Anúncio Exato (Modo Sniper)"
                             }
-            except Exception as e:
-                print(f"Erro Sniper: {e}")
+            except Exception:
+                pass
         
         match_slug = re.search(r'mercadolivre\.com\.br/([^/]+)', termo_base)
         if match_slug:
             slug = match_slug.group(1).replace("-", " ")
-            if "MLB" not in slug: 
+            if "MLB" not in slug:
                 termo_base = slug
 
-    # 2. BUSCA EM CASCATA MULTI-TIER (Garante o match na API do ML)
+    # ==========================================
+    # 2. BUSCA PÚBLICA RESILIENTE (CASCATA DE TEXTO)
+    # ==========================================
     termo_limpo = re.sub(r'[-–—_+,;:\(\)\[\]\/\*]', ' ', termo_base)
     palavras = [p for p in termo_limpo.split() if p]
 
-    # Tentativas progressivas: termo completo -> 4 palavras -> 2 palavras
+    # Estratégia de tentativas progressivas para garantir acerto na API do ML
     tentativas = [
-        termo_base,                                                       
-        " ".join(palavras[:4]) if len(palavras) >= 4 else termo_base,     
-        " ".join(palavras[:2]) if len(palavras) >= 2 else termo_base      
+        termo_base,
+        " ".join(palavras[:5]) if len(palavras) >= 5 else termo_base,
+        " ".join(palavras[:3]) if len(palavras) >= 3 else termo_base
     ]
-    tentativas = list(dict.fromkeys(tentativas)) # Remove duplicadas
+    tentativas = list(dict.fromkeys(tentativas))
 
     for tentativa in tentativas:
-        if not tentativa.strip(): continue
+        if not tentativa.strip():
+            continue
         
         url_api = f"https://api.mercadolibre.com/sites/MLB/search?q={urllib.parse.quote(tentativa)}&limit=50"
         
@@ -72,24 +77,32 @@ def buscar_menor_preco_ml(termo_busca: str, custo_compra: float = 0.0) -> Dict:
                     candidatos = []
                     for item in results:
                         preco = float(item.get('price', 0.0))
-                        if preco <= 0: continue
+                        if preco <= 0:
+                            continue
                         
-                        # Trava financeira de segurança (desacopla itens abaixo de 20% do custo)
-                        if custo_compra > 0 and preco < (custo_compra * 0.20): continue
+                        # Trava financeira de segurança contra distorções extremas
+                        if custo_compra > 0 and preco < (custo_compra * 0.15):
+                            continue
 
                         link = item.get('permalink', '').split('?')[0]
                         titulo = item.get('title', '')
                         
                         titulo_lower = titulo.lower()
-                        if any(x in titulo_lower for x in ["pecas", "carcaca", "defeituoso", "quebrado"]):
+                        # Filtro estrito apenas para itens explicitamente sucata/defeituosos
+                        if any(x in titulo_lower for x in ["com defeito", "para peças", "quebrado", "carcaça"]):
                             continue
 
                         if not link or "mercadolivre.com.br" not in link:
                             continue
 
-                        candidatos.append({"preco": preco, "link": link, "titulo": titulo})
+                        candidatos.append({
+                            "preco": preco, 
+                            "link": link, 
+                            "titulo": titulo
+                        })
 
                     if candidatos:
+                        # Ordena estritamente do menor para o maior preço real de mercado
                         candidatos.sort(key=lambda x: x["preco"])
                         melhor = candidatos[0]
                         return {
@@ -97,13 +110,16 @@ def buscar_menor_preco_ml(termo_busca: str, custo_compra: float = 0.0) -> Dict:
                             "menor_preco": melhor["preco"],
                             "link": melhor["link"],
                             "titulo_encontrado": melhor["titulo"],
-                            "auditoria_ia": f"⚡ Sucesso (Cascata: '{tentativa}')"
+                            "auditoria_ia": f"⚡ Extração Real (Busca: '{tentativa}')"
                         }
         except Exception as e:
-            print(f"Erro na tentativa '{tentativa}': {e}")
+            print(f"Erro na API ML para '{tentativa}': {e}")
             continue
 
+    # ==========================================
+    # 3. FALHA CONTROLADA COM ORIENTAÇÃO CLARA
+    # ==========================================
     return {
         "encontrado": False,
-        "mensagem": "❌ PRODUTO NÃO ENCONTRADO.<br><br>Cole o <b>LINK EXATO</b> do Mercado Livre."
+        "mensagem": "❌ PRODUTO NÃO ENCONTRADO PELA API.<br><br>Dica: Cole o <b>LINK DIRETO</b> do anúncio do Mercado Livre para captura instantânea e exata."
     }
