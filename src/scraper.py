@@ -1,5 +1,5 @@
 """
-SmartML Ultra - Módulo de Scraper Definitivo (Alta Precisão e Sem Filtros Restritivos)
+SmartML Ultra - Scraper Definitivo com Busca em Cascata Multi-Tier
 """
 import re
 import urllib.request
@@ -36,8 +36,8 @@ def buscar_menor_preco_ml(termo_busca: str, custo_compra: float = 0.0) -> Dict:
                                 "titulo_encontrado": titulo_real,
                                 "auditoria_ia": "🎯 Anúncio Exato (Modo Sniper)"
                             }
-            except Exception:
-                pass
+            except Exception as e:
+                print(f"Erro Sniper: {e}")
         
         match_slug = re.search(r'mercadolivre\.com\.br/([^/]+)', termo_base)
         if match_slug:
@@ -45,52 +45,65 @@ def buscar_menor_preco_ml(termo_busca: str, custo_compra: float = 0.0) -> Dict:
             if "MLB" not in slug: 
                 termo_base = slug
 
-    # 2. BUSCA PÚBLICA NA API DO MERCADO LIVRE
+    # 2. BUSCA EM CASCATA MULTI-TIER (Garante o match na API do ML)
     termo_limpo = re.sub(r'[-–—_+,;:\(\)\[\]\/\*]', ' ', termo_base)
-    url_api = f"https://api.mercadolivre.com/sites/MLB/search?q={urllib.parse.quote(termo_limpo)}&limit=35"
-    
-    try:
-        req = urllib.request.Request(url_api, headers=headers)
-        with urllib.request.urlopen(req, timeout=10) as response:
-            if response.status == 200:
-                dados = json.loads(response.read().decode('utf-8'))
-                results = dados.get('results', [])
-                
-                candidatos = []
-                for item in results:
-                    preco = float(item.get('price', 0.0))
-                    if preco <= 0: continue
+    palavras = [p for p in termo_limpo.split() if p]
+
+    # Tentativas progressivas: termo completo -> 4 palavras -> 2 palavras
+    tentativas = [
+        termo_base,                                                       
+        " ".join(palavras[:4]) if len(palavras) >= 4 else termo_base,     
+        " ".join(palavras[:2]) if len(palavras) >= 2 else termo_base      
+    ]
+    tentativas = list(dict.fromkeys(tentativas)) # Remove duplicadas
+
+    for tentativa in tentativas:
+        if not tentativa.strip(): continue
+        
+        url_api = f"https://api.mercadolibre.com/sites/MLB/search?q={urllib.parse.quote(tentativa)}&limit=50"
+        
+        try:
+            req = urllib.request.Request(url_api, headers=headers)
+            with urllib.request.urlopen(req, timeout=10) as response:
+                if response.status == 200:
+                    dados = json.loads(response.read().decode('utf-8'))
+                    results = dados.get('results', [])
                     
-                    # Trava financeira de segurança (desacopla acessórios absurdamente baratos)
-                    if custo_compra > 0 and preco < (custo_compra * 0.25): continue
+                    candidatos = []
+                    for item in results:
+                        preco = float(item.get('price', 0.0))
+                        if preco <= 0: continue
+                        
+                        # Trava financeira de segurança (desacopla itens abaixo de 20% do custo)
+                        if custo_compra > 0 and preco < (custo_compra * 0.20): continue
 
-                    link = item.get('permalink', '').split('?')[0]
-                    titulo = item.get('title', '')
-                    
-                    titulo_lower = titulo.lower()
-                    # Filtra itens explicitamente usados ou acessórios genéricos indesejados
-                    if any(x in titulo_lower for x in ["usado", "seminovo", "recondicionado", "pelicula", "capa", "case", "cabo", "carregador"]):
-                        continue
+                        link = item.get('permalink', '').split('?')[0]
+                        titulo = item.get('title', '')
+                        
+                        titulo_lower = titulo.lower()
+                        if any(x in titulo_lower for x in ["pecas", "carcaca", "defeituoso", "quebrado"]):
+                            continue
 
-                    if not link or "mercadolivre.com.br" not in link:
-                        continue
+                        if not link or "mercadolivre.com.br" not in link:
+                            continue
 
-                    candidatos.append({"preco": preco, "link": link, "titulo": titulo})
+                        candidatos.append({"preco": preco, "link": link, "titulo": titulo})
 
-                if candidatos:
-                    candidatos.sort(key=lambda x: x["preco"])
-                    melhor = candidatos[0]
-                    return {
-                        "encontrado": True,
-                        "menor_preco": melhor["preco"],
-                        "link": melhor["link"],
-                        "titulo_encontrado": melhor["titulo"],
-                        "auditoria_ia": "⚡ Extração Concluída com Sucesso"
-                    }
-    except Exception as e:
-        print(f"Erro na API ML: {e}")
+                    if candidatos:
+                        candidatos.sort(key=lambda x: x["preco"])
+                        melhor = candidatos[0]
+                        return {
+                            "encontrado": True,
+                            "menor_preco": melhor["preco"],
+                            "link": melhor["link"],
+                            "titulo_encontrado": melhor["titulo"],
+                            "auditoria_ia": f"⚡ Sucesso (Cascata: '{tentativa}')"
+                        }
+        except Exception as e:
+            print(f"Erro na tentativa '{tentativa}': {e}")
+            continue
 
     return {
         "encontrado": False,
-        "mensagem": "❌ PRODUTO NÃO ENCONTRADO PELA API.<br><br>Cole o <b>LINK EXATO</b> do Mercado Livre no campo de busca para precisão absoluta."
+        "mensagem": "❌ PRODUTO NÃO ENCONTRADO.<br><br>Cole o <b>LINK EXATO</b> do Mercado Livre."
     }
