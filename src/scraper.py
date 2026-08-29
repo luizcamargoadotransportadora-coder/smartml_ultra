@@ -1,8 +1,6 @@
 """
-SmartML Ultra - Módulo de Scraper e Auditoria de Precisão (NLP)
-Filtra anúncios garantindo apenas produtos novos, com cores, modelos exatos e sem acessórios indesejados.
+SmartML Ultra - Módulo de Scraper e Auditoria de Precisão (NLP) + Modo Sniper
 """
-
 import re
 import unicodedata
 import urllib.request
@@ -31,13 +29,10 @@ MAPA_CORES = {
     "verde": ["verde", "green"]
 }
 
-
 def normalizar_texto(texto: str) -> str:
-    if not texto:
-        return ""
+    if not texto: return ""
     texto = texto.lower().replace("-", " ")
     return ''.join(c for c in unicodedata.normalize('NFD', texto) if unicodedata.category(c) != 'Mn')
-
 
 class AuditorIAUltra:
     @staticmethod
@@ -45,62 +40,62 @@ class AuditorIAUltra:
         termo_norm = normalizar_texto(termo_busca)
         titulo_norm = normalizar_texto(titulo_anuncio)
 
-        # 1. Filtro Estrito: Condições indesejadas (Usado, Caixa Aberta, Vitrine, etc.)
         for termo_ruim in TERMOS_EXCLUIDOS_CONDICAO:
             if termo_ruim in titulo_norm:
-                return {
-                    "aprovado": False,
-                    "motivo": f"Descartado: Item Não-Novo ('{termo_ruim.upper()}')"
-                }
+                return {"aprovado": False, "motivo": f"Item Não-Novo"}
 
-        # 2. Validação dos Números do Modelo (Ex: 17, 256, etc.)
         nums_termo = re.findall(r'\b\d+\b', termo_norm)
         for num in nums_termo:
             if len(num) >= 2 or num in ["5", "4", "3"]:
                 if num not in titulo_norm:
-                    return {
-                        "aprovado": False,
-                        "motivo": f"Divergência: número '{num}' ausente no anúncio"
-                    }
+                    return {"aprovado": False, "motivo": f"Falta '{num}'"}
 
-        # 3. Validação de Cor
         for cor_chave, variacoes in MAPA_CORES.items():
             if cor_chave in termo_norm or any(v in termo_norm for v in variacoes):
                 todas = [cor_chave] + variacoes
                 if not any(v in titulo_norm for v in todas):
-                    return {
-                        "aprovado": False,
-                        "motivo": f"Divergência de cor: Solicitado '{cor_chave.upper()}'"
-                    }
+                    return {"aprovado": False, "motivo": "Divergência de cor"}
 
-        # 4. Trava de Acessórios (Se a busca principal não for por capa, bloqueia capas)
-        palavras_ruins_filtradas = [
-            p for p in PALAVRAS_EXCLUIDAS_ACESSORIOS if p not in termo_norm
-        ]
+        palavras_ruins_filtradas = [p for p in PALAVRAS_EXCLUIDAS_ACESSORIOS if p not in termo_norm]
         if any(exc in titulo_norm for exc in palavras_ruins_filtradas):
-            return {
-                "aprovado": False,
-                "motivo": "Anúncio é um acessório incompatível"
-            }
+            return {"aprovado": False, "motivo": "Acessório incompatível"}
 
-        return {
-            "aprovado": True,
-            "motivo": "⚡ Auditado por IA de precisão avançada"
-        }
+        return {"aprovado": True, "motivo": "⚡ Auditado por IA"}
 
-
-def buscar_menor_preco_ml(termo_busca: str, custo_compra: float = 0.0) -> Optional[Dict]:
-    """
-    Varre a API pública do Mercado Livre aplicando a auditoria estrita de novos e modelos.
-    """
+def buscar_menor_preco_ml(termo_busca: str, custo_compra: float = 0.0) -> Dict:
     termo_base = str(termo_busca).strip()
-    url_api = f"https://api.mercadolibre.com/sites/MLB/search?q={urllib.parse.quote(termo_base)}&sort=price_asc"
     
+    # ==========================================
+    # 1. MODO SNIPER (BURLA O BUSCADOR DO ML)
+    # Lê links diretos ou códigos como MLB123456
+    # ==========================================
+    match_mlb = re.search(r'MLB[-_]?\s*(\d+)', termo_base, re.IGNORECASE)
+    if match_mlb:
+        mlb_id = f"MLB{match_mlb.group(1)}"
+        url_item = f"https://api.mercadolibre.com/items/{mlb_id}"
+        try:
+            req = urllib.request.Request(url_item, headers={'User-Agent': 'Mozilla/5.0'})
+            with urllib.request.urlopen(req, timeout=10) as response:
+                if response.status == 200:
+                    item = json.loads(response.read().decode('utf-8'))
+                    preco = float(item.get('price', 0.0))
+                    if preco > 0:
+                        return {
+                            "encontrado": True,
+                            "menor_preco": preco,
+                            "link": item.get('permalink', '').split('?')[0],
+                            "titulo_encontrado": item.get('title', ''),
+                            "auditoria_ia": "🎯 Anúncio Exato (Modo Sniper)"
+                        }
+        except Exception as e:
+            return {"encontrado": False} # Falhou a leitura do link
+
+    # ==========================================
+    # 2. BUSCA NORMAL (TEXTO)
+    # ==========================================
+    url_api = f"https://api.mercadolibre.com/sites/MLB/search?q={urllib.parse.quote(termo_base)}&sort=price_asc"
     try:
-        req = urllib.request.Request(
-            url_api, 
-            headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
-        )
+        req = urllib.request.Request(url_api, headers={'User-Agent': 'Mozilla/5.0'})
         with urllib.request.urlopen(req, timeout=10) as response:
             if response.status == 200:
                 dados = json.loads(response.read().decode('utf-8'))
@@ -108,28 +103,18 @@ def buscar_menor_preco_ml(termo_busca: str, custo_compra: float = 0.0) -> Option
                 
                 candidatos_validos = []
                 for item in results:
-                    # Exige estritamente que o produto seja novo
-                    if item.get('condition') != 'new':
-                        continue
-                    
-                    titulo = item.get('title', '')
+                    if item.get('condition') != 'new': continue
                     preco = float(item.get('price', 0.0))
                     link = item.get('permalink', '').split('?')[0]
+                    titulo = item.get('title', '')
                     
-                    # Trava contábil: descarta absurdos operacionais (preço menor que 40% do custo)
-                    if custo_compra > 0 and preco < (custo_compra * 0.40):
-                        continue
+                    if custo_compra > 0 and preco < (custo_compra * 0.40): continue
 
-                    # Executa a auditoria de IA nos títulos
                     parecer = AuditorIAUltra.auditar(termo_base, titulo)
-                    if not parecer["aprovado"]:
-                        continue
+                    if not parecer["aprovado"]: continue
 
                     candidatos_validos.append({
-                        "preco": preco,
-                        "link": link,
-                        "titulo": titulo,
-                        "auditoria": parecer["motivo"]
+                        "preco": preco, "link": link, "titulo": titulo, "auditoria": parecer["motivo"]
                     })
 
                 if candidatos_validos:
