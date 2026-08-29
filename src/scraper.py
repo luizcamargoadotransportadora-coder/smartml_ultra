@@ -1,19 +1,57 @@
 """
-SmartML Ultra - Módulo de Scraper Real (Sem Fallbacks Fictícios - Apenas Dados Reais)
+SmartML Ultra - Módulo de Scraper Oficial Autenticado (Client Credentials + Anti-Bloqueio Nuvem)
 """
 import re
 import urllib.request
 import urllib.parse
 import json
-from typing import Dict
+from typing import Dict, Optional
+
+# Credenciais Oficiais da Aplicação SmartMLEngine
+CLIENT_ID = "6903491647062278"
+CLIENT_SECRET = "qm1v0B0xZNhoMB0qtSH6T6wk814L5n4e"
+
+_TOKEN_CACHE = None
+
+def _obter_token_oficial() -> Optional[str]:
+    """Gera o token OAuth de forma automatizada para liberar o acesso via Render."""
+    global _TOKEN_CACHE
+    if _TOKEN_CACHE:
+        return _TOKEN_CACHE
+
+    url = "https://api.mercadolibre.com/oauth/token"
+    payload = urllib.parse.urlencode({
+        "grant_type": "client_credentials",
+        "client_id": CLIENT_ID,
+        "client_secret": CLIENT_SECRET
+    }).encode("utf-8")
+
+    try:
+        req = urllib.request.Request(url, data=payload, headers={
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Accept": "application/json",
+            "User-Agent": "SmartMLEngine/1.0"
+        })
+        with urllib.request.urlopen(req, timeout=10) as response:
+            if response.status == 200:
+                data = json.loads(response.read().decode("utf-8"))
+                _TOKEN_CACHE = data.get("access_token")
+                return _TOKEN_CACHE
+    except Exception as e:
+        print(f"Erro OAuth ML: {e}")
+    return None
 
 def buscar_menor_preco_ml(termo_busca: str, custo_compra: float = 0.0) -> Dict:
     termo_base = str(termo_busca).strip()
+    token = _obter_token_oficial()
+    
     headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "User-Agent": "SmartMLEngine/1.0",
         "Accept": "application/json"
     }
-    
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+
     # 1. MODO SNIPER (Links Diretos ou IDs MLB exatos)
     match_item = re.search(r'MLB[-_]?(\d+)', termo_base, re.IGNORECASE)
     if "mercadolivre.com.br" in termo_base or match_item:
@@ -34,21 +72,20 @@ def buscar_menor_preco_ml(termo_busca: str, custo_compra: float = 0.0) -> Dict:
                                 "menor_preco": preco,
                                 "link": link_real,
                                 "titulo_encontrado": titulo_real,
-                                "auditoria_ia": "🎯 Anúncio Exato (Sniper Real)"
+                                "auditoria_ia": "🎯 Anúncio Exato (Sniper Oficial)"
                             }
             except Exception:
                 pass
         
-        # Se for link de catálogo do ML, extrai o termo limpo
         match_slug = re.search(r'mercadolivre\.com\.br/([^/]+)', termo_base)
         if match_slug:
             slug = match_slug.group(1).replace("-", " ")
             if "MLB" not in slug: 
                 termo_base = slug
 
-    # 2. BUSCA OFICIAL NA API DO MERCADO LIVRE (DADOS REAIS DE RUA)
+    # 2. BUSCA OFICIAL AUTENTICADA NA API DO MERCADO LIVRE
     termo_limpo = re.sub(r'[-–—_+,;:\(\)\[\]\/\*]', ' ', termo_base)
-    url_api = f"https://api.mercadolibre.com/sites/MLB/search?q={urllib.parse.quote(termo_limpo)}&limit=25"
+    url_api = f"https://api.mercadolibre.com/sites/MLB/search?q={urllib.parse.quote(termo_limpo)}&limit=30"
     
     try:
         req = urllib.request.Request(url_api, headers=headers)
@@ -78,7 +115,6 @@ def buscar_menor_preco_ml(termo_busca: str, custo_compra: float = 0.0) -> Dict:
                     candidatos.append({"preco": preco, "link": link, "titulo": titulo})
 
                 if candidatos:
-                    # Ordena estritamente pelo menor preço real de mercado
                     candidatos.sort(key=lambda x: x["preco"])
                     melhor = candidatos[0]
                     return {
@@ -86,13 +122,12 @@ def buscar_menor_preco_ml(termo_busca: str, custo_compra: float = 0.0) -> Dict:
                         "menor_preco": melhor["preco"],
                         "link": melhor["link"],
                         "titulo_encontrado": melhor["titulo"],
-                        "auditoria_ia": "⚡ Extração Real de Mercado"
+                        "auditoria_ia": "⚡ Extração Oficial Autorizada"
                     }
     except Exception as e:
-        print(f"Erro na API ML: {e}")
+        print(f"Erro na API Oficial do ML: {e}")
 
-    # 3. FALHA CONTROLADA: Sem dados inventados. Se o mercado não retornar, o sistema avisa o operador.
     return {
         "encontrado": False,
-        "mensagem": "❌ CONCORRENTE NÃO ENCONTRADO.<br><br>Insira o <b>LINK DIRETO</b> do anúncio do Mercado Livre para capturar o link real e o menor preço exato."
+        "mensagem": "❌ PRODUTO NÃO ENCONTRADO PELA API.<br><br>Cole o <b>LINK EXATO</b> do Mercado Livre no campo de busca para captura direta."
     }
