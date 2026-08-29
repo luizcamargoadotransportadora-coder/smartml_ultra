@@ -1,133 +1,92 @@
 """
-SmartML Ultra v100.1 - API HTTP (FastAPI)
-Envelopamento do motor de cálculo para execução local e integração com AppSheet/Webhooks.
+SmartML Ultra - API Principal (FastAPI)
+Motor de Buybox e Scraping Integrados.
 """
-
-from __future__ import annotations
-
-import os
-import sys
-from pathlib import Path
-from typing import Any, Dict, List, Optional
-
 from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
+from typing import Optional
+import urllib.request
+import json
 
-# Garante que a pasta 'src' esteja acessível para importação
-RAIZ = Path(__file__).resolve().parent
-SRC = RAIZ / "src"
-if str(SRC) not in sys.path:
-    sys.path.insert(0, str(SRC))
+from src.config_loader import carregar_config
+from src.scraper import buscar_menor_preco_ml
 
-from config_loader import carregar_config
-import motor
+app = FastAPI(title="SmartML Ultra API", version="100.4")
+cfg = carregar_config()
 
-app = FastAPI(
-    title="SmartML Ultra API",
-    version="100.1",
-    description="API de Precificação Multimoeda, Frete Real e Classificação de Viabilidade"
-)
+class RequisicaoAnalise(BaseModel):
+    titulo: str
+    custo: float
 
-# Habilita CORS para permitir conexões do AppSheet e navegadores
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Carrega a configuração na inicialização
-try:
-    cfg = carregar_config()
-except Exception as e:
-    cfg = None
-    print(f"[AVISO] Falha ao carregar config inicial: {e}")
-
-
-class ProdutoInput(BaseModel):
-    titulo: str = Field(..., description="Nome ou descrição do produto")
-    custo: float = Field(..., gt=0, description="Custo na moeda de origem")
-    moeda: str = Field(default="USD", description="Moeda de origem: USD, PYG ou BRL")
-    categoria: Optional[str] = Field(default=None, description="Categoria opcional para comissão")
-    peso_kg: float = Field(default=0.5, gt=0, description="Peso real em kg")
-    comprimento_cm: float = Field(default=20.0, gt=0, description="Comprimento em cm")
-    largura_cm: float = Field(default=15.0, gt=0, description="Largura em cm")
-    altura_cm: float = Field(default=10.0, gt=0, description="Altura em cm")
-    estrategia: str = Field(default="equilibrado", description="Estratégia: 'equilibrado' ou 'lucro'")
-
-
-class LoteInput(BaseModel):
-    produtos: List[ProdutoInput]
-
+def round2(n):
+    return round(n + 1e-9, 2)
 
 @app.get("/")
-def health_check() -> Dict[str, str]:
-    """Endpoint de checagem de integridade do serviço."""
-    return {
-        "status": "online",
-        "sistema": "SmartML Ultra",
-        "versao": "100.1"
-    }
-
+def health_check():
+    return {"status": "online", "projeto": "SmartML Ultra", "versao": "100.4"}
 
 @app.post("/analisar")
-def analisar_produto(dados: ProdutoInput) -> Dict[str, Any]:
-    """Processa um produto individual e retorna a análise completa com faixas e recomendação."""
-    global cfg
-    if cfg is None:
-        cfg = carregar_config()
-
+def analisar_produto(req: RequisicaoAnalise):
     try:
-        resultado = motor.processar(
-            cfg=cfg,
-            titulo=dados.titulo,
-            custo=dados.custo,
-            moeda=dados.moeda,
-            categoria=dados.categoria,
-            peso_kg=dados.peso_kg,
-            comprimento_cm=dados.comprimento_cm,
-            largura_cm=dados.largura_cm,
-            altura_cm=dados.altura_cm,
-            estrategia=dados.estrategia
-        )
-        return resultado.to_dict()
-    except Exception as erro:
-        raise HTTPException(status_code=500, detail=f"Erro no processamento do motor: {str(erro)}")
+        # 1. Scraping NLP de Alta Precisão
+        dados_mercado = buscar_menor_preco_ml(req.titulo, req.custo)
+        
+        if not dados_mercado.get("encontrado"):
+            return {
+                "sucesso": False, 
+                "mensagem": "❌ PRODUTO NÃO ENCONTRADO PELA IA.<br><br>Cole o <b>LINK EXATO</b> do Mercado Livre no campo de busca para precisão absoluta."
+            }
 
+        menor_preco = float(dados_mercado["menor_preco"])
+        if menor_preco <= 0:
+            return {"sucesso": False, "mensagem": "❌ Preço de concorrente inválido capturado."}
 
-@app.post("/analisar-lote")
-def analisar_lote(lote: LoteInput) -> List[Dict[str, Any]]:
-    """Processa múltiplos produtos em uma única requisição."""
-    global cfg
-    if cfg is None:
-        cfg = carregar_config()
+        # 2. Matemática Contábil (Buybox Real)
+        pb = round2(menor_preco * 0.98)
+        pc = round2(menor_preco * 0.94)
+        custo = req.custo
+        
+        # Premium
+        cp_brl = round2(pb * 0.165)
+        ip_brl = round2(pb * 0.06)
+        tf_p = 6.0 if pb < 79 else 0.0
+        fr_p = 18.5 if pb >= 79 else 0.0
+        avarias = round2(custo * 0.015)
+        ct_p = round2(custo + cp_brl + tf_p + fr_p + ip_brl + 1.0 + 2.5 + avarias)
+        lucro_p = round2(pb - ct_p)
+        margem_p = round2((lucro_p / pb) * 100) if pb > 0 else 0
+        
+        # Classico
+        cc_brl = round2(pc * 0.115)
+        ic_brl = round2(pc * 0.06)
+        tf_c = 6.0 if pc < 79 else 0.0
+        fr_c = 18.5 if pc >= 79 else 0.0
+        ct_c = round2(custo + cc_brl + tf_c + fr_c + ic_brl + 1.0 + 2.5 + avarias)
+        lucro_c = round2(pc - ct_c)
+        margem_c = round2((lucro_c / pc) * 100) if pc > 0 else 0
 
-    respostas = []
-    for item in lote.produtos:
-        try:
-            res = motor.processar(
-                cfg=cfg,
-                titulo=item.titulo,
-                custo=item.custo,
-                moeda=item.moeda,
-                categoria=item.categoria,
-                peso_kg=item.peso_kg,
-                comprimento_cm=item.comprimento_cm,
-                largura_cm=item.largura_cm,
-                altura_cm=item.altura_cm,
-                estrategia=item.estrategia
-            )
-            respostas.append(res.to_dict())
-        except Exception as erro:
-            respostas.append({
-                "titulo": item.titulo,
-                "erro": str(erro)
-            })
-    return respostas
+        # Veredito
+        lucro_min = 150.0 if custo >= 3000 else (60.0 if custo >= 500 else 15.0)
+        status = "A"
+        if lucro_p <= 0 and lucro_c <= 0:
+            status = "E"
+        elif lucro_p < lucro_min or margem_p < 4.0:
+            status = "D"
 
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+        return {
+            "sucesso": True,
+            "titulo": dados_mercado.get("titulo_encontrado", req.titulo),
+            "menor_preco": menor_preco,
+            "link": dados_mercado["link"],
+            "premium": {
+                "preco": pb, "comissao": cp_brl, "taxa_fixa": tf_p, "frete": fr_p, "imposto": ip_brl,
+                "nf": 1.0, "emb": 2.5, "avarias": avarias, "custo_total": ct_p, "lucro": lucro_p, "margem": margem_p
+            },
+            "classico": {
+                "preco": pc, "comissao": cc_brl, "taxa_fixa": tf_c, "frete": fr_c, "imposto": ic_brl,
+                "custo_total": ct_c, "lucro": lucro_c, "margem": margem_c
+            },
+            "status": status
+        }
+    except Exception as e:
+        return {"sucesso": False, "mensagem": f"Erro interno no servidor: {str(e)}"}
