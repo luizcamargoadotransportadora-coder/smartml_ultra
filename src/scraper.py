@@ -1,5 +1,5 @@
 """
-SmartML Ultra - Módulo de Scraper Oficial (Autenticado via Client Credentials do ML)
+SmartML Ultra - Módulo de Scraper Oficial Autenticado (Client Credentials)
 """
 import re
 import unicodedata
@@ -8,17 +8,17 @@ import urllib.parse
 import json
 from typing import Dict, Optional
 
-# Suas Credenciais Oficiais do Mercado Livre Developers
+# Credenciais Oficiais da Aplicação SmartMLEngine (Isoladas de conta de vendas)
 CLIENT_ID = "6903491647062278"
 CLIENT_SECRET = "qm1v0B0xZNhoMB0qtSH6T6wk814L5n4e"
 
-_ACCESS_TOKEN_CACHE = None
+_TOKEN_CACHE = None
 
-def obter_token_ml() -> Optional[str]:
-    """Gera automaticamente o Access Token oficial via Client Credentials."""
-    global _ACCESS_TOKEN_CACHE
-    if _ACCESS_TOKEN_CACHE:
-        return _ACCESS_TOKEN_CACHE
+def _obter_token_oficial() -> Optional[str]:
+    """Gera e cacheia o token de acesso de forma totalmente automatizada e segura."""
+    global _TOKEN_CACHE
+    if _TOKEN_CACHE:
+        return _TOKEN_CACHE
 
     url = "https://api.mercadolibre.com/oauth/token"
     payload = urllib.parse.urlencode({
@@ -36,16 +36,17 @@ def obter_token_ml() -> Optional[str]:
         with urllib.request.urlopen(req, timeout=10) as response:
             if response.status == 200:
                 data = json.loads(response.read().decode("utf-8"))
-                _ACCESS_TOKEN_CACHE = data.get("access_token")
-                return _ACCESS_TOKEN_CACHE
+                _TOKEN_CACHE = data.get("access_token")
+                return _TOKEN_CACHE
     except Exception as e:
-        print(f"Erro ao autenticar na API do ML: {e}")
+        print(f"Erro crítico na autenticação OAuth ML: {e}")
     return None
 
 def buscar_menor_preco_ml(termo_busca: str, custo_compra: float = 0.0) -> Dict:
     termo_base = str(termo_busca).strip()
-    token = obter_token_ml()
+    token = _obter_token_oficial()
     
+    # Cabeçalhos oficiais com Bearer Token autenticado
     headers = {
         "User-Agent": "SmartMLEngine/1.0",
         "Accept": "application/json"
@@ -84,7 +85,7 @@ def buscar_menor_preco_ml(termo_busca: str, custo_compra: float = 0.0) -> Dict:
                 termo_base = slug
 
     # ==========================================
-    # 2. BUSCA OFICIAL AUTENTICADA POR TEXTO
+    # 2. BUSCA OFICIAL AUTENTICADA POR TEXTO (CASCATA)
     # ==========================================
     termo_limpo = re.sub(r'[-–—_+,;:\(\)\[\]\/\*]', ' ', termo_base)
     palavras = [p for p in termo_limpo.split() if p]
@@ -98,7 +99,7 @@ def buscar_menor_preco_ml(termo_busca: str, custo_compra: float = 0.0) -> Dict:
     for tentativa in tentativas:
         if not tentativa.strip(): continue
         
-        url_api = f"https://api.mercadolibre.com/sites/MLB/search?q={urllib.parse.quote(tentativa)}&limit=20"
+        url_api = f"https://api.mercadolibre.com/sites/MLB/search?q={urllib.parse.quote(tentativa)}&limit=30"
         
         try:
             req = urllib.request.Request(url_api, headers=headers)
@@ -111,15 +112,18 @@ def buscar_menor_preco_ml(termo_busca: str, custo_compra: float = 0.0) -> Dict:
                     for item in results:
                         if item.get('condition') != 'new': continue
                         preco = float(item.get('price', 0.0))
+                        if preco <= 0: continue
                         
-                        # Trava financeira antifraude / anticapinha (40% do custo)
-                        if custo_compra > 0 and preco < (custo_compra * 0.40): continue
+                        # Trava financeira de segurança (desacopla acessórios absurdamente baratos)
+                        if custo_compra > 0 and preco < (custo_compra * 0.25): continue
 
                         link = item.get('permalink', '').split('?')[0]
                         titulo = item.get('title', '')
                         
                         titulo_lower = titulo.lower()
-                        if "pecas" in titulo_lower or "carcaca" in titulo_lower: continue
+                        if any(x in titulo_lower for x in ["pelicula", "capa", "case", "cabo", "carregador", "película"]):
+                            if not any(x in termo_base.lower() for x in ["pelicula", "capa", "case", "cabo", "carregador"]):
+                                continue
 
                         candidatos.append({
                             "preco": preco, "link": link, "titulo": titulo
