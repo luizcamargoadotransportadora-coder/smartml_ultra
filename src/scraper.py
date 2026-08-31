@@ -1,45 +1,40 @@
 """
-SmartML Ultra - Price Discovery Engine v8.7 (Blindado com Pré-Filtro Matemático)
+SmartML Ultra - Price Discovery Engine v9.0 (Arquitetura API Meli Oficial)
 """
 from __future__ import annotations
 import json
 import logging
 import os
 import re
-import statistics
 import time
 import unicodedata
 import urllib.parse
-import winsound
 from dataclasses import dataclass
 
 from google import genai
 from google.genai import types
 from dotenv import load_dotenv
+import requests
 
-import undetected_chromedriver as uc
-from selenium.webdriver.common.by import By
+# Tratamento DevOps para rodar na nuvem (Linux) sem quebrar o winsound do notebook (Windows)
+try:
+    import winsound
+    HAS_WINSOUND = True
+except ImportError:
+    HAS_WINSOUND = False
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s [%(name)s] %(message)s")
 log = logging.getLogger("smartml.scraper")
 
-FRONT = "https://lista.mercadolivre.com.br"
-
 # ============================================================ EFEITOS SONOROS
-def som_alerta_bloqueio():
-    """Toca o som de Erro direto da pasta do Windows para alertar CAPTCHA."""
-    try:
-        arquivo_erro = r"C:\Windows\Media\Windows Critical Stop.wav"
-        winsound.PlaySound(arquivo_erro, winsound.SND_FILENAME)
-    except: pass
-
 def som_campainha_meli():
-    """Toca O SEU arquivo de áudio original do Mercado Livre."""
-    try:
-        arquivo_sucesso = os.path.join(os.getcwd(), "notificacao_meli.wav")
-        winsound.PlaySound(arquivo_sucesso, winsound.SND_FILENAME)
-    except Exception as e: 
-        log.error(f"[audio] Erro ao tocar som: {e}")
+    """Toca o áudio apenas se estiver rodando localmente no notebook."""
+    if HAS_WINSOUND:
+        try:
+            arquivo_sucesso = os.path.join(os.getcwd(), "notificacao_meli.wav")
+            winsound.PlaySound(arquivo_sucesso, winsound.SND_FILENAME | winsound.SND_ASYNC)
+        except Exception as e: 
+            log.error(f"[audio] Erro ao tocar som: {e}")
 
 # ============================================================ UTILITÁRIOS
 def strip_accents(t: str) -> str:
@@ -56,7 +51,7 @@ class ResolverIA:
     def normalizar(texto_bruto: str) -> dict:
         load_dotenv()
         api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key: return {}
+        if not api_key: return {"termo_busca": texto_bruto}
         try:
             client = genai.Client(api_key=api_key)
             prompt = f"""
@@ -76,31 +71,20 @@ class ResolverIA:
                 config=types.GenerateContentConfig(response_mime_type="application/json", temperature=0.0)
             )
             return json.loads(response.text)
-        except Exception as e:
-            log.warning(f"[ia] API falhou no normalizador. Ativando Plano B de limpeza...")
-            vetos_comuns = ["capinha", "pelicula", "sucata", "caixa", "acessorio", "defeito"]
-            termo_limpo = texto_bruto
-            vetos_encontrados = []
-            
-            for veto in vetos_comuns:
-                if veto in termo_limpo.lower():
-                    vetos_encontrados.append(veto)
-                    termo_limpo = re.sub(fr'\b{veto}\b', '', termo_limpo, flags=re.IGNORECASE)
-            
-            termo_limpo = re.sub(r'\s+', ' ', termo_limpo).replace(' e ', ' ').strip()
-            return {"termo_busca": termo_limpo, "palavras_veto": vetos_encontrados}
+        except Exception:
+            return {"termo_busca": texto_bruto, "palavras_veto": []}
 
 class AuditorIAUltra:
     @staticmethod
     def auditar(termo_busca: str, titulo_anuncio: str, texto_card: str) -> dict:
         load_dotenv()
         api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key: return {"aprovado": False, "motivo": "Sem chave", "confianca": "BAIXA"}
+        if not api_key: return {"aprovado": False, "motivo": "Sem chave do Gemini", "confianca": "BAIXA"}
         try:
             client = genai.Client(api_key=api_key)
             prompt = f"""
             Audite rigorosamente para e-commerce. Buscado: "{termo_busca}" | Título: "{titulo_anuncio}" | Card: "{texto_card}"
-            Regras: Rejeite usados, vitrines, caixa aberta, acessórios (capa/película) ou divergência de modelo/capacidade.
+            Regras: Rejeite usados, vitrines, caixa aberta, acessórios (capa/película/caixa) ou divergência de modelo/capacidade.
             Responda EXATAMENTE JSON: {{"aprovado": true/false, "motivo": "motivo curto", "confianca": "ALTA"}}
             """
             response = client.models.generate_content(
@@ -110,41 +94,7 @@ class AuditorIAUltra:
             )
             return json.loads(response.text)
         except Exception:
-            return {"aprovado": False, "motivo": "Bloqueio preventivo por falha na API", "confianca": "BAIXA"}
-
-# ============================================================ NAVEGADOR
-class BrowserManager:
-    _instance = None
-    @classmethod
-    def get_instance(cls):
-        if cls._instance is None: cls._instance = cls()
-        return cls._instance
-
-    def __init__(self):
-        self.driver = None
-        self.iniciar_driver()
-
-    def iniciar_driver(self):
-        if self.driver: 
-            try: self.driver.quit()
-            except: pass
-        
-        opts = uc.ChromeOptions()
-        opts.add_argument("--start-maximized")
-        profile_dir = os.path.join(os.getcwd(), "chrome_profile")
-        
-        log.info("Iniciando Undetected Chromedriver...")
-        self.driver = uc.Chrome(options=opts, user_data_dir=profile_dir, version_main=151)
-
-    def buscar_pagina(self, url: str):
-        self.driver.get(url)
-        time.sleep(3.5)
-        
-        html_page = self.driver.page_source.lower()
-        if "captcha" in html_page or "verificação" in html_page or "account-verification" in self.driver.current_url.lower():
-            log.warning("⚠️ ALERTA: ROBÔ DETECTADO! Intervenção humana necessária.")
-            som_alerta_bloqueio()
-            time.sleep(15)
+            return {"aprovado": False, "motivo": "Falha na API da IA", "confianca": "BAIXA"}
 
 @dataclass
 class Offer:
@@ -152,117 +102,84 @@ class Offer:
     price: float
     permalink: str
 
-# ============================================================ MOTOR PRINCIPAL
+# ============================================================ MOTOR PRINCIPAL DE DADOS
 def buscar_menor_preco_ml(termo_busca: str, custo_compra: float = 0.0) -> dict:
     termo = str(termo_busca).strip()
     
     ia_data = ResolverIA.normalizar(termo)
     termo_limpo = ia_data.get("termo_busca", termo)
-    vetos = ia_data.get("palavras_veto", [])
     
-    log.info("[ia] Termo limpo: '%s' | Vetos: %s", termo_limpo, vetos)
+    log.info("[api] Buscando na Fonte Oficial: '%s'", termo_limpo)
 
-    browser = BrowserManager.get_instance()
-    slug = urllib.parse.quote(norm(termo_limpo).replace(" ", "-"))
-    url_alvo = f"{FRONT}/{slug}"
+    # 1. ACESSO DIRETO VIA API OFICIAL (Bypass de Cloudflare & 10x mais rápido)
+    url_api = f"https://api.mercadolibre.com/sites/MLB/search?q={urllib.parse.quote(termo_limpo)}&condition=new"
     
-    log.info("[selenium] Acessando URL: %s", url_alvo)
-    browser.buscar_pagina(url_alvo)
+    try:
+        resp = requests.get(url_api, timeout=10)
+        if resp.status_code != 200:
+            return {"encontrado": False, "mensagem": "❌ ERRO DE COMUNICAÇÃO COM O ML."}
+        dados = resp.json()
+    except Exception as e:
+        log.error("[api] Falha severa: %s", e)
+        return {"encontrado": False, "mensagem": "❌ REDE DO SERVIDOR INOPERANTE."}
     
-    elementos = browser.driver.find_elements(
-        By.CSS_SELECTOR, 
-        "div.poly-card, li.ui-search-layout__item, div.ui-search-result__wrapper, div.andes-card"
-    )
-    log.info("[selenium] Elementos brutos encontrados na pagina: %d", len(elementos))
+    resultados = dados.get("results", [])
+    log.info("[api] Coletados %d itens brutos instantaneamente.", len(resultados))
     
     ofertas = []
-    # Agora varremos até 30 elementos para garantir que passamos das capinhas patrocinadas
-    for idx, el in enumerate(elementos[:30]):
-        try:
-            texto = el.text
-            if not texto or "indisponível" in texto.lower() or "esgotado" in texto.lower():
+    
+    for item in resultados[:30]:  # Varredura profunda rápida
+        titulo = item.get("title", "")
+        preco = float(item.get("price", 0.0))
+        link = item.get("permalink", "")
+        
+        if not titulo or preco <= 0: continue
+
+        # 2. A PENEIRA MATEMÁTICA (Destrói capinhas sem gastar IA)
+        if custo_compra > 0:
+            limite_minimo = custo_compra * 0.25
+            if preco < limite_minimo:
+                log.info("[filtro_matematico] Lixo rejeitado: R$ %.2f - '%s'", preco, titulo[:30])
                 continue
 
-            titulo = ""
-            for sel_tit in ["a.poly-component__title", "h2.ui-search-item__title", "h2.poly-box", "h2"]:
-                try:
-                    el_t = el.find_element(By.CSS_SELECTOR, sel_tit)
-                    if el_t.text:
-                        titulo = el_t.text; break
-                except: continue
-            
-            if not titulo: continue
-
-            # 1. EXTRAÇÃO DE PREÇO (Invertemos a arquitetura: o preço é extraído PRIMEIRO)
-            preco = 0.0
-            matches_preco = re.findall(r"R\$\s*([\d\.]+)(?:,(\d{2}))?", texto)
-            if matches_preco:
-                lista = []
-                for m in matches_preco:
-                    val = float(f"{m[0].replace('.', '')}.{m[1] if m[1] else '00'}")
-                    if val > 10: lista.append(val)
-                if lista: preco = min(lista)
-            
-            if preco <= 0: continue
-
-            # 2. PRÉ-FILTRO MATEMÁTICO (Trava anti-capinha sem gastar IA)
-            if custo_compra and custo_compra > 0:
-                limite_minimo = custo_compra * 0.25 # Exige que o preço de venda seja pelo menos 25% do seu custo
-                if preco < limite_minimo:
-                    log.info("[pre-filtro] Rejeitado por preço (R$ %.2f é muito baixo para custo R$ %.2f): '%s'", preco, custo_compra, titulo[:40])
-                    continue
-
-            # 3. PRÉ-FILTRO TEXTUAL LOCAL
-            texto_baixo = texto.lower()
-            lixo_obvio = ["recondicionado", "vitrine", "seminovo", "usado", "mostruário", "sucata", "caixa aberta"]
-            if any(palavra in texto_baixo for palavra in lixo_obvio):
-                log.info("[filtro_local] Rejeitado (Lixo óbvio): '%s'", titulo[:40])
-                continue
-
-            # 4. AUDITORIA PROFUNDA PELA IA (Apenas em anúncios que passaram na peneira do preço)
-            auditoria = AuditorIAUltra.auditar(termo_limpo, titulo, texto)
-            time.sleep(4) # Pausa estratégica LOGO APÓS a chamada da API para respeitar a cota gratuita
-            
-            if not auditoria.get("aprovado", True):
-                log.info("[auditor_ia] Rejeitado: '%s' | Motivo: %s", titulo[:40], auditoria.get("motivo"))
-                continue
-
-            # 5. ANÚNCIO APROVADO: Extrair link e salvar
-            link = ""
-            for sel_link in ["a.poly-component__title", "a.ui-search-link", "a"]:
-                try:
-                    el_l = el.find_element(By.CSS_SELECTOR, sel_link)
-                    href = el_l.get_attribute("href")
-                    if href and "mercadolivre.com.br" in href and "lista.mercadolivre" not in href:
-                        link = href; break
-                except: continue
-
-            if not link: continue
-
-            ofertas.append(Offer(titulo, preco, link.split('?')[0]))
-            log.info("[sucesso] Oferta validada: R$ %.2f - %s", preco, titulo[:40])
-            
-            # Trava de Eficiência: Se a IA já validou 3 concorrentes bons, paramos a busca para entregar a resposta rápida.
-            if len(ofertas) >= 3:
-                log.info("[motor] 3 ofertas validadas encontradas. Encerrando busca para economia e velocidade.")
-                break
-            
-        except Exception:
+        # 3. FILTRO TEXTUAL DE SEGURANÇA
+        texto_baixo = titulo.lower()
+        lixo_obvio = ["recondicionado", "vitrine", "seminovo", "usado", "mostruário", "sucata", "caixa vazia"]
+        if any(palavra in texto_baixo for palavra in lixo_obvio):
             continue
+
+        # 4. A AUDITORIA FINA DA INTELIGÊNCIA ARTIFICIAL
+        # Coleta atributos ricos do JSON da API para a IA ler
+        attrs = ", ".join([f"{a.get('name')}: {a.get('value_name')}" for a in item.get("attributes", [])[:6]])
+        texto_card = f"Preço: R$ {preco}. Especificações: {attrs}"
+        
+        auditoria = AuditorIAUltra.auditar(termo_limpo, titulo, texto_card)
+        time.sleep(3) # Pausa estratégica vital para não tomar ban da cota gratuita do Gemini
+        
+        if not auditoria.get("aprovado", True):
+            log.info("[auditor_ia] Rejeitado: '%s' | Motivo: %s", titulo[:40], auditoria.get("motivo"))
+            continue
+
+        ofertas.append(Offer(titulo, preco, link))
+        log.info("[SUCESSO] Ativo validado: R$ %.2f - %s", preco, titulo[:40])
+        
+        # Assim que acha 3 reais concorrentes, cessa a busca para devolver o resultado pro celular.
+        if len(ofertas) >= 3:
+            break
 
     if ofertas:
         ofertas.sort(key=lambda x: x.price)
-        prices = [o.price for o in ofertas]
+        menor = ofertas[0]
         
-        log.info("🎯 OPORTUNIDADE ENCONTRADA! Tocando campainha...")
+        log.info("🎯 RESULTADO ALCANÇADO! R$ %.2f", menor.price)
         som_campainha_meli()
         
         return {
             "encontrado": True,
-            "menor_preco": min(prices),
-            "link": ofertas[0].permalink,
-            "titulo_encontrado": ofertas[0].title,
-            "auditoria_ia": f"🤖 Híbrido IA Blindada | Amostra: {len(prices)}"
+            "menor_preco": menor.price,
+            "link": menor.permalink,
+            "titulo_encontrado": menor.title,
+            "auditoria_ia": f"🤖 Motor API Meli | Amostra Blindada: {len(ofertas)}"
         }
 
-    return {"encontrado": False, "diagnostico": "Nenhum anúncio compatível", "mensagem": "❌ PRODUTO NÃO ENCONTRADO PELA IA."}
+    return {"encontrado": False, "diagnostico": "Zero compatibilidade.", "mensagem": "❌ PRODUTO NÃO ENCONTRADO PELA IA."}
