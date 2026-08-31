@@ -1,5 +1,5 @@
 """
-SmartML Ultra - Price Discovery Engine v8.6 (Áudio Oficial do Usuário)
+SmartML Ultra - Price Discovery Engine v8.7 (Blindado com Pré-Filtro Matemático)
 """
 from __future__ import annotations
 import json
@@ -36,7 +36,6 @@ def som_alerta_bloqueio():
 def som_campainha_meli():
     """Toca O SEU arquivo de áudio original do Mercado Livre."""
     try:
-        # Aponta exatamente para o nome do arquivo que você forneceu
         arquivo_sucesso = os.path.join(os.getcwd(), "notificacao_meli.wav")
         winsound.PlaySound(arquivo_sucesso, winsound.SND_FILENAME)
     except Exception as e: 
@@ -72,7 +71,7 @@ class ResolverIA:
             Texto: "{texto_bruto}"
             """
             response = client.models.generate_content(
-                model='gemini-3.6-flash',
+                model='gemini-1.5-flash',
                 contents=prompt,
                 config=types.GenerateContentConfig(response_mime_type="application/json", temperature=0.0)
             )
@@ -105,7 +104,7 @@ class AuditorIAUltra:
             Responda EXATAMENTE JSON: {{"aprovado": true/false, "motivo": "motivo curto", "confianca": "ALTA"}}
             """
             response = client.models.generate_content(
-                model='gemini-3.6-flash',
+                model='gemini-1.5-flash',
                 contents=prompt,
                 config=types.GenerateContentConfig(response_mime_type="application/json", temperature=0.0)
             )
@@ -174,10 +173,11 @@ def buscar_menor_preco_ml(termo_busca: str, custo_compra: float = 0.0) -> dict:
         By.CSS_SELECTOR, 
         "div.poly-card, li.ui-search-layout__item, div.ui-search-result__wrapper, div.andes-card"
     )
-    log.info("[selenium] Elementos brutos encontrados: %d", len(elementos))
+    log.info("[selenium] Elementos brutos encontrados na pagina: %d", len(elementos))
     
     ofertas = []
-    for idx, el in enumerate(elementos[:3]):
+    # Agora varremos até 30 elementos para garantir que passamos das capinhas patrocinadas
+    for idx, el in enumerate(elementos[:30]):
         try:
             texto = el.text
             if not texto or "indisponível" in texto.lower() or "esgotado" in texto.lower():
@@ -193,28 +193,41 @@ def buscar_menor_preco_ml(termo_busca: str, custo_compra: float = 0.0) -> dict:
             
             if not titulo: continue
 
-            texto_baixo = texto.lower()
-            lixo_obvio = ["recondicionado", "vitrine", "seminovo", "usado", "mostruário", "sucata", "caixa aberta"]
-            if any(palavra in texto_baixo for palavra in lixo_obvio):
-                log.info("[filtro_local] Rejeitado (Lixo óbvio): '%s'", titulo[:40])
-                continue
-
-            auditoria = AuditorIAUltra.auditar(termo_limpo, titulo, texto)
-            if not auditoria.get("aprovado", True):
-                log.info("[auditor] Rejeitado: '%s' | Motivo: %s", titulo[:40], auditoria.get("motivo"))
-                continue
-
+            # 1. EXTRAÇÃO DE PREÇO (Invertemos a arquitetura: o preço é extraído PRIMEIRO)
             preco = 0.0
             matches_preco = re.findall(r"R\$\s*([\d\.]+)(?:,(\d{2}))?", texto)
             if matches_preco:
                 lista = []
                 for m in matches_preco:
                     val = float(f"{m[0].replace('.', '')}.{m[1] if m[1] else '00'}")
-                    if val > 100: lista.append(val)
+                    if val > 10: lista.append(val)
                 if lista: preco = min(lista)
             
             if preco <= 0: continue
 
+            # 2. PRÉ-FILTRO MATEMÁTICO (Trava anti-capinha sem gastar IA)
+            if custo_compra and custo_compra > 0:
+                limite_minimo = custo_compra * 0.25 # Exige que o preço de venda seja pelo menos 25% do seu custo
+                if preco < limite_minimo:
+                    log.info("[pre-filtro] Rejeitado por preço (R$ %.2f é muito baixo para custo R$ %.2f): '%s'", preco, custo_compra, titulo[:40])
+                    continue
+
+            # 3. PRÉ-FILTRO TEXTUAL LOCAL
+            texto_baixo = texto.lower()
+            lixo_obvio = ["recondicionado", "vitrine", "seminovo", "usado", "mostruário", "sucata", "caixa aberta"]
+            if any(palavra in texto_baixo for palavra in lixo_obvio):
+                log.info("[filtro_local] Rejeitado (Lixo óbvio): '%s'", titulo[:40])
+                continue
+
+            # 4. AUDITORIA PROFUNDA PELA IA (Apenas em anúncios que passaram na peneira do preço)
+            auditoria = AuditorIAUltra.auditar(termo_limpo, titulo, texto)
+            time.sleep(4) # Pausa estratégica LOGO APÓS a chamada da API para respeitar a cota gratuita
+            
+            if not auditoria.get("aprovado", True):
+                log.info("[auditor_ia] Rejeitado: '%s' | Motivo: %s", titulo[:40], auditoria.get("motivo"))
+                continue
+
+            # 5. ANÚNCIO APROVADO: Extrair link e salvar
             link = ""
             for sel_link in ["a.poly-component__title", "a.ui-search-link", "a"]:
                 try:
@@ -227,7 +240,12 @@ def buscar_menor_preco_ml(termo_busca: str, custo_compra: float = 0.0) -> dict:
             if not link: continue
 
             ofertas.append(Offer(titulo, preco, link.split('?')[0]))
-            time.sleep(4) # Pausa de 4s para respeitar o limite gratuito da API
+            log.info("[sucesso] Oferta validada: R$ %.2f - %s", preco, titulo[:40])
+            
+            # Trava de Eficiência: Se a IA já validou 3 concorrentes bons, paramos a busca para entregar a resposta rápida.
+            if len(ofertas) >= 3:
+                log.info("[motor] 3 ofertas validadas encontradas. Encerrando busca para economia e velocidade.")
+                break
             
         except Exception:
             continue
@@ -247,4 +265,4 @@ def buscar_menor_preco_ml(termo_busca: str, custo_compra: float = 0.0) -> dict:
             "auditoria_ia": f"🤖 Híbrido IA Blindada | Amostra: {len(prices)}"
         }
 
-    return {"encontrado": False, "diagnostico": "Nenhum anúncio válido", "mensagem": "❌ PRODUTO NÃO ENCONTRADO."}
+    return {"encontrado": False, "diagnostico": "Nenhum anúncio compatível", "mensagem": "❌ PRODUTO NÃO ENCONTRADO PELA IA."}
