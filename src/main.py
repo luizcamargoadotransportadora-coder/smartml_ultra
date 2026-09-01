@@ -1,10 +1,10 @@
 """
-SmartML Ultra - API Principal (FastAPI)
-Motor de Buybox e Scraping Integrados.
+SmartML Ultra - API Principal (FastAPI) v100.4
+Motor de Buybox e Scraping Integrados com Suporte a Lotes.
 """
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
-from typing import Optional
+from typing import List, Optional
 import urllib.request
 import json
 
@@ -18,12 +18,15 @@ class RequisicaoAnalise(BaseModel):
     titulo: str
     custo: float
 
+class RequisicaoLote(BaseModel):
+    produtos: List[RequisicaoAnalise]
+
 def round2(n):
     return round(n + 1e-9, 2)
 
 @app.get("/")
 def health_check():
-    return {"status": "online", "projeto": "SmartML Ultra", "versao": "100.4"}
+    return {"status": "online", "projeto": "SmartML Ultra", "versao": "100.4", "sistema": "ativo"}
 
 @app.post("/analisar")
 def analisar_produto(req: RequisicaoAnalise):
@@ -90,3 +93,11 @@ def analisar_produto(req: RequisicaoAnalise):
         }
     except Exception as e:
         return {"sucesso": False, "mensagem": f"Erro interno no servidor: {str(e)}"}
+
+@app.post("/analisar-lote")
+def analisar_lote(req: RequisicaoLote):
+    resultados = []
+    for item in req.produtos:
+        res = analisar_produto(item)
+        resultados.append(res)
+    return {"sucesso": True, "total": len(resultados), "resultados": resultados}
