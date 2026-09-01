@@ -1,6 +1,6 @@
 """
 SmartML Ultra - API Principal (FastAPI) v100.4
-Motor de Buybox e Scraping Integrados com Suporte a Lotes.
+Integrado com Motor Contábil, Scraping e Persistência SQLite.
 """
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
@@ -10,6 +10,7 @@ import json
 
 from src.config_loader import carregar_config
 from src.scraper import buscar_menor_preco_ml
+from src.database import salvar_analise
 
 app = FastAPI(title="SmartML Ultra API", version="100.4")
 cfg = carregar_config()
@@ -76,9 +77,12 @@ def analisar_produto(req: RequisicaoAnalise):
         elif lucro_p < lucro_min or margem_p < 4.0:
             status = "D"
 
-        return {
+        resultado_json = {
             "sucesso": True,
+            "titulo_original": req.titulo,
             "titulo": dados_mercado.get("titulo_encontrado", req.titulo),
+            "titulo_encontrado": dados_mercado.get("titulo_encontrado", req.titulo),
+            "custo_base": custo,
             "menor_preco": menor_preco,
             "link": dados_mercado["link"],
             "premium": {
@@ -89,8 +93,18 @@ def analisar_produto(req: RequisicaoAnalise):
                 "preco": pc, "comissao": cc_brl, "taxa_fixa": tf_c, "frete": fr_c, "imposto": ic_brl,
                 "custo_total": ct_c, "lucro": lucro_c, "margem": margem_c
             },
-            "status": status
+            "status": status,
+            "confianca": "ALTA"
         }
+
+        # 3. Persistência Automática no SQLite Local (Rastreabilidade de Campo)
+        try:
+            salvar_analise(resultado_json)
+        except Exception as db_err:
+            print(f"[banco] Aviso ao salvar no SQLite: {db_err}")
+
+        return resultado_json
+
     except Exception as e:
         return {"sucesso": False, "mensagem": f"Erro interno no servidor: {str(e)}"}
 
