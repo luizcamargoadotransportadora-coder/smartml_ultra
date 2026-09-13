@@ -1,185 +1,65 @@
-"""
-SmartML Ultra - Price Discovery Engine v9.0 (Arquitetura API Meli Oficial)
-"""
-from __future__ import annotations
-import json
-import logging
-import os
-import re
-import time
-import unicodedata
-import urllib.parse
-from dataclasses import dataclass
+﻿import re, time, logging, os
+from bs4 import BeautifulSoup
+import undetected_chromedriver as uc
 
-from google import genai
-from google.genai import types
-from dotenv import load_dotenv
-import requests
-
-# Tratamento DevOps para rodar na nuvem (Linux) sem quebrar o winsound do notebook (Windows)
-try:
-    import winsound
-    HAS_WINSOUND = True
-except ImportError:
-    HAS_WINSOUND = False
-
-logging.basicConfig(level=logging.INFO, format="%(levelname)s [%(name)s] %(message)s")
 log = logging.getLogger("smartml.scraper")
+PERFIL_DIR = os.path.abspath("ml_perfil")
 
-# ============================================================ EFEITOS SONOROS
-def som_campainha_meli():
-    """Toca o áudio apenas se estiver rodando localmente no notebook."""
-    if HAS_WINSOUND:
-        try:
-            arquivo_sucesso = os.path.join(os.getcwd(), "notificacao_meli.wav")
-            winsound.PlaySound(arquivo_sucesso, winsound.SND_FILENAME | winsound.SND_ASYNC)
-        except Exception as e: 
-            log.error(f"[audio] Erro ao tocar som: {e}")
+def _obter_driver():
+    opts = uc.ChromeOptions()
+    opts.add_argument(f"--user-data-dir={PERFIL_DIR}")
+    opts.add_argument("--window-size=1280,850")
+    driver = uc.Chrome(options=opts, version_main=152)
+    return driver
 
-# ============================================================ UTILITÁRIOS
-def strip_accents(t: str) -> str:
-    return "".join(c for c in unicodedata.normalize("NFKD", t) if not unicodedata.combining(c))
+def fazer_login():
+    print("\nAbrindo o Chrome autenticado...")
+    driver = _obter_driver()
+    driver.get("https://www.mercadolivre.com.br")
+    input("\n[!] Faca seu login ou resolva o captcha na janela aberta.\n[!] Quando terminar e estiver logado, volte aqui e aperte ENTER: ")
+    driver.quit()
+    print("\nSessao gravada com sucesso! Nao pedira mais login.")
 
-def norm(t: str) -> str:
-    t = strip_accents(t or "").lower()
-    t = re.sub(r"[^a-z0-9\s]", " ", t)
-    return re.sub(r"\s+", " ", t).strip()
-
-# ============================================================ INTELIGÊNCIA ARTIFICIAL
-class ResolverIA:
-    @staticmethod
-    def normalizar(texto_bruto: str) -> dict:
-        load_dotenv()
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key: return {"termo_busca": texto_bruto}
-        try:
-            client = genai.Client(api_key=api_key)
-            prompt = f"""
-            Você é um normalizador de identificação de produtos para e-commerce. 
-            Extraia os dados do texto abaixo EXATAMENTE neste formato JSON:
-            {{
-                "termo_busca": "String limpa e corrigida",
-                "palavras_veto": ["lista", "de", "palavras", "acessorios", "ou", "sucata", "para", "excluir"]
-            }}
-            Regras: Extraia apenas o que está no texto. Corrija erros. Padronize grandezas (ex: 256 GB). 
-            Se indicar acessório, capinha ou sucata, coloque em 'palavras_veto'. Responda APENAS JSON.
-            Texto: "{texto_bruto}"
-            """
-            response = client.models.generate_content(
-                model='gemini-1.5-flash',
-                contents=prompt,
-                config=types.GenerateContentConfig(response_mime_type="application/json", temperature=0.0)
-            )
-            return json.loads(response.text)
-        except Exception:
-            return {"termo_busca": texto_bruto, "palavras_veto": []}
-
-class AuditorIAUltra:
-    @staticmethod
-    def auditar(termo_busca: str, titulo_anuncio: str, texto_card: str) -> dict:
-        load_dotenv()
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key: return {"aprovado": False, "motivo": "Sem chave do Gemini", "confianca": "BAIXA"}
-        try:
-            client = genai.Client(api_key=api_key)
-            prompt = f"""
-            Audite rigorosamente para e-commerce. Buscado: "{termo_busca}" | Título: "{titulo_anuncio}" | Card: "{texto_card}"
-            Regras: Rejeite usados, vitrines, caixa aberta, acessórios (capa/película/caixa) ou divergência de modelo/capacidade.
-            Responda EXATAMENTE JSON: {{"aprovado": true/false, "motivo": "motivo curto", "confianca": "ALTA"}}
-            """
-            response = client.models.generate_content(
-                model='gemini-1.5-flash',
-                contents=prompt,
-                config=types.GenerateContentConfig(response_mime_type="application/json", temperature=0.0)
-            )
-            return json.loads(response.text)
-        except Exception:
-            return {"aprovado": False, "motivo": "Falha na API da IA", "confianca": "BAIXA"}
-
-@dataclass
-class Offer:
-    title: str
-    price: float
-    permalink: str
-
-# ============================================================ MOTOR PRINCIPAL DE DADOS
-def buscar_menor_preco_ml(termo_busca: str, custo_compra: float = 0.0) -> dict:
-    termo = str(termo_busca).strip()
-    
-    ia_data = ResolverIA.normalizar(termo)
-    termo_limpo = ia_data.get("termo_busca", termo)
-    
-    log.info("[api] Buscando na Fonte Oficial: '%s'", termo_limpo)
-
-    # 1. ACESSO DIRETO VIA API OFICIAL (Bypass de Cloudflare & 10x mais rápido)
-    url_api = f"https://api.mercadolibre.com/sites/MLB/search?q={urllib.parse.quote(termo_limpo)}&condition=new"
-    
+def buscar_menor_preco_ml(termo, custo_base=0.0):
+    termo_limpo = " ".join(re.sub(r"[^\w\s]", " ", termo).split())
+    termo_slug = "-".join(termo_limpo.lower().split())
+    url = f"https://lista.mercadolivre.com.br/{termo_slug}"
+    driver = _obter_driver()
     try:
-        resp = requests.get(url_api, timeout=10)
-        if resp.status_code != 200:
-            return {"encontrado": False, "mensagem": "❌ ERRO DE COMUNICAÇÃO COM O ML."}
-        dados = resp.json()
-    except Exception as e:
-        log.error("[api] Falha severa: %s", e)
-        return {"encontrado": False, "mensagem": "❌ REDE DO SERVIDOR INOPERANTE."}
-    
-    resultados = dados.get("results", [])
-    log.info("[api] Coletados %d itens brutos instantaneamente.", len(resultados))
-    
-    ofertas = []
-    
-    for item in resultados[:30]:  # Varredura profunda rápida
-        titulo = item.get("title", "")
-        preco = float(item.get("price", 0.0))
-        link = item.get("permalink", "")
-        
-        if not titulo or preco <= 0: continue
-
-        # 2. A PENEIRA MATEMÁTICA (Destrói capinhas sem gastar IA)
-        if custo_compra > 0:
-            limite_minimo = custo_compra * 0.25
-            if preco < limite_minimo:
-                log.info("[filtro_matematico] Lixo rejeitado: R$ %.2f - '%s'", preco, titulo[:30])
+        driver.get(url)
+        time.sleep(4)
+        soup = BeautifulSoup(driver.page_source, "html.parser")
+        cards = soup.select(".poly-card, .ui-search-layout__item, div.ui-search-result__wrapper")
+        anuncios = []
+        ignorar = ["capa", "capinha", "pelicula", "película", "cabo", "carregador", "suporte", "fone", "adaptador", "case"]
+        for card in cards:
+            tag_tit = card.select_one(".poly-component__title, a.ui-search-link, .ui-search-item__title, h2")
+            if not tag_tit: continue
+            tit = tag_tit.get_text(strip=True)
+            if any(x in tit.lower() for x in ignorar): continue
+            tag_lnk = card.select_one("a[href*=\x27mercadolivre.com.br\x27]") or tag_tit
+            lnk = tag_lnk.get("href", "") if tag_lnk.name == "a" else (card.find("a", href=True)["href"] if card.find("a", href=True) else "")
+            tag_f = card.select_one(".andes-money-amount__fraction")
+            if not tag_f: continue
+            try:
+                p = float(re.sub(r"[^\d]", "", tag_f.get_text(strip=True)))
+                tag_c = card.select_one(".andes-money-amount__cents")
+                if tag_c: p += float(re.sub(r"[^\d]", "", tag_c.get_text(strip=True))) / 100.0
+            except:
                 continue
-
-        # 3. FILTRO TEXTUAL DE SEGURANÇA
-        texto_baixo = titulo.lower()
-        lixo_obvio = ["recondicionado", "vitrine", "seminovo", "usado", "mostruário", "sucata", "caixa vazia"]
-        if any(palavra in texto_baixo for palavra in lixo_obvio):
-            continue
-
-        # 4. A AUDITORIA FINA DA INTELIGÊNCIA ARTIFICIAL
-        # Coleta atributos ricos do JSON da API para a IA ler
-        attrs = ", ".join([f"{a.get('name')}: {a.get('value_name')}" for a in item.get("attributes", [])[:6]])
-        texto_card = f"Preço: R$ {preco}. Especificações: {attrs}"
-        
-        auditoria = AuditorIAUltra.auditar(termo_limpo, titulo, texto_card)
-        time.sleep(3) # Pausa estratégica vital para não tomar ban da cota gratuita do Gemini
-        
-        if not auditoria.get("aprovado", True):
-            log.info("[auditor_ia] Rejeitado: '%s' | Motivo: %s", titulo[:40], auditoria.get("motivo"))
-            continue
-
-        ofertas.append(Offer(titulo, preco, link))
-        log.info("[SUCESSO] Ativo validado: R$ %.2f - %s", preco, titulo[:40])
-        
-        # Assim que acha 3 reais concorrentes, cessa a busca para devolver o resultado pro celular.
-        if len(ofertas) >= 3:
-            break
-
-    if ofertas:
-        ofertas.sort(key=lambda x: x.price)
-        menor = ofertas[0]
-        
-        log.info("🎯 RESULTADO ALCANÇADO! R$ %.2f", menor.price)
-        som_campainha_meli()
-        
-        return {
-            "encontrado": True,
-            "menor_preco": menor.price,
-            "link": menor.permalink,
-            "titulo_encontrado": menor.title,
-            "auditoria_ia": f"🤖 Motor API Meli | Amostra Blindada: {len(ofertas)}"
-        }
-
-    return {"encontrado": False, "diagnostico": "Zero compatibilidade.", "mensagem": "❌ PRODUTO NÃO ENCONTRADO PELA IA."}
+            if p > 0: anuncios.append({"titulo": tit, "preco": p, "link": lnk})
+        if not anuncios:
+            return {"encontrado": False, "mensagem": f"Nenhum anuncio valido para {termo}."}
+        if custo_base > 0:
+            validos = [a for a in anuncios if a["preco"] >= (custo_base * 0.3)]
+            if validos: anuncios = validos
+        anuncios.sort(key=lambda x: x["preco"])
+        m = anuncios[0]
+        return {"encontrado": True, "menor_preco": m["preco"], "link": m["link"], "titulo_encontrado": m["titulo"]}
+    except Exception as e:
+        return {"encontrado": False, "mensagem": f"Erro automacao: {str(e)}"}
+    finally:
+        try:
+            driver.quit()
+        except:
+            pass

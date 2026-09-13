@@ -1,117 +1,213 @@
+﻿"""
+SmartML Ultra - FastAPI Main Controller v11.2
+Interface Web + Auditoria ML + Gemini Vision Universal
 """
-SmartML Ultra - API Principal (FastAPI) v100.4
-Integrado com Motor Contábil, Scraping e Persistência SQLite.
-"""
-from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel
-from typing import List, Optional
-import urllib.request
+import os
+import re
 import json
+import io
+import base64
+import logging
+import urllib.request
+import urllib.error
+from PIL import Image
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from pydantic import BaseModel
 
-from src.config_loader import carregar_config
 from src.scraper import buscar_menor_preco_ml
 from src.database import salvar_analise
 
-app = FastAPI(title="SmartML Ultra API", version="100.4")
-cfg = carregar_config()
+app = FastAPI(title="Smart Meli Ultra API", version="11.2")
 
-class RequisicaoAnalise(BaseModel):
+logging.basicConfig(level=logging.INFO)
+log = logging.getLogger("smartml.main")
+
+GEMINI_API_KEY = "AQ.Ab8RN6Ke9QFUqn4-OUDli6V0vTdXNfZBA7iMZZPSHoINiaQUig"
+
+@app.get("/")
+def abrir_aplicativo():
+    caminho_html = os.path.join(os.getcwd(), "static", "index.html")
+    if os.path.exists(caminho_html):
+        return FileResponse(caminho_html)
+    return {"erro": "Arquivo static/index.html não encontrado no servidor."}
+
+class EntradaImagem(BaseModel):
+    imagem_base64: str
+
+@app.post("/reconhecer-imagem")
+def reconhecer_imagem(entrada: EntradaImagem):
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
+    
+    base64_data = entrada.imagem_base64
+    if "," in base64_data:
+        base64_data = base64_data.split(",")[1]
+
+    # Pipeline de compressão rápida
+    try:
+        img_bytes = base64.b64decode(base64_data)
+        img = Image.open(io.BytesIO(img_bytes))
+        if img.mode in ("RGBA", "P"):
+            img = img.convert("RGB")
+        img.thumbnail((1024, 1024))
+        buf = io.BytesIO()
+        img.save(buf, format="JPEG", quality=80, optimize=True)
+        base64_data = base64.b64encode(buf.getvalue()).decode("utf-8")
+    except Exception as img_err:
+        log.warning(f"Aviso compressao: {img_err}")
+
+    prompt = (
+        "Identifique o produto comercial nesta imagem (eletrônicos, perfumes, cosméticos, bebidas, ferramentas ou utilidades em geral). "
+        "Retorne APENAS a marca, a linha/modelo e a especificação essencial (como volume, capacidade ou versão) para busca direta no Mercado Livre. "
+        "Exemplos: 'Perfume Sauvage Dior EDP 100ml', 'Whisky Black Label 1L', 'Galaxy S23 256GB', 'Stanley Garrafa Térmica 1.4L', 'Parafusadeira Bosch GSB 18V'. "
+        "NÃO escreva introduções, NÃO use palavras como caixa, embalagem, original, lacrado, novo ou importado."
+    )
+
+    payload = {
+        "contents": [{
+            "parts": [
+                {"text": prompt},
+                {
+                    "inline_data": {
+                        "mime_type": "image/jpeg",
+                        "data": base64_data
+                    }
+                }
+            ]
+        }],
+        "generationConfig": {
+            "temperature": 0.1
+        }
+    }
+
+    headers = {
+        "Content-Type": "application/json",
+        "X-goog-api-key": GEMINI_API_KEY.strip()
+    }
+
+    try:
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers=headers,
+            method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=90) as response:
+            res_json = json.loads(response.read().decode("utf-8"))
+            texto_bruto = res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
+            
+            texto_limpo = re.sub(r'[`"\'*_\n\r\t]', ' ', texto_bruto)
+            texto_limpo = re.sub(r'\s+', ' ', texto_limpo).strip()
+            
+            for prefixo in ["produto:", "modelo:", "item:", "marca:"]:
+                if texto_limpo.lower().startswith(prefixo):
+                    texto_limpo = texto_limpo[len(prefixo):].strip()
+
+            log.info(f"Termo extraído pela IA: {texto_limpo}")
+            return {"sucesso": True, "produto": texto_limpo}
+            
+    except urllib.error.HTTPError as he:
+        err_msg = he.read().decode("utf-8")
+        log.error(f"Erro HTTP Gemini ({he.code}): {err_msg}")
+        return {"sucesso": False, "mensagem": f"Erro Google ({he.code}): {err_msg[:120]}"}
+    except Exception as e:
+        log.error(f"Falha de conexão com Gemini: {e}")
+        return {"sucesso": False, "mensagem": f"Erro: {str(e)}"}
+
+class EntradaAnalise(BaseModel):
     titulo: str
     custo: float
 
-class RequisicaoLote(BaseModel):
-    produtos: List[RequisicaoAnalise]
-
-def round2(n):
-    return round(n + 1e-9, 2)
-
-@app.get("/")
-def health_check():
-    return {"status": "online", "projeto": "SmartML Ultra", "versao": "100.4", "sistema": "ativo"}
-
 @app.post("/analisar")
-def analisar_produto(req: RequisicaoAnalise):
+def analisar_produto(entrada: EntradaAnalise):
     try:
-        # 1. Scraping NLP de Alta Precisão
-        dados_mercado = buscar_menor_preco_ml(req.titulo, req.custo)
+        log.info(f"Iniciando auditoria: {entrada.titulo} | Custo: R$ {entrada.custo}")
         
-        if not dados_mercado.get("encontrado"):
+        resultado_scraper = buscar_menor_preco_ml(entrada.titulo, entrada.custo)
+        
+        if not resultado_scraper.get("encontrado"):
             return {
-                "sucesso": False, 
-                "mensagem": "❌ PRODUTO NÃO ENCONTRADO PELA IA.<br><br>Cole o <b>LINK EXATO</b> do Mercado Livre no campo de busca para precisão absoluta."
+                "sucesso": False,
+                "mensagem": resultado_scraper.get("mensagem", "❌ PRODUTO NÃO ENCONTRADO.")
             }
 
-        menor_preco = float(dados_mercado["menor_preco"])
-        if menor_preco <= 0:
-            return {"sucesso": False, "mensagem": "❌ Preço de concorrente inválido capturado."}
+        menor_preco = resultado_scraper["menor_preco"]
+        link = resultado_scraper["link"]
+        titulo_encontrado = resultado_scraper["titulo_encontrado"]
 
-        # 2. Matemática Contábil (Buybox Real)
-        pb = round2(menor_preco * 0.98)
-        pc = round2(menor_preco * 0.94)
-        custo = req.custo
-        
-        # Premium
-        cp_brl = round2(pb * 0.165)
-        ip_brl = round2(pb * 0.06)
-        tf_p = 6.0 if pb < 79 else 0.0
-        fr_p = 18.5 if pb >= 79 else 0.0
-        avarias = round2(custo * 0.015)
-        ct_p = round2(custo + cp_brl + tf_p + fr_p + ip_brl + 1.0 + 2.5 + avarias)
-        lucro_p = round2(pb - ct_p)
-        margem_p = round2((lucro_p / pb) * 100) if pb > 0 else 0
-        
-        # Classico
-        cc_brl = round2(pc * 0.115)
-        ic_brl = round2(pc * 0.06)
-        tf_c = 6.0 if pc < 79 else 0.0
-        fr_c = 18.5 if pc >= 79 else 0.0
-        ct_c = round2(custo + cc_brl + tf_c + fr_c + ic_brl + 1.0 + 2.5 + avarias)
-        lucro_c = round2(pc - ct_c)
-        margem_c = round2((lucro_c / pc) * 100) if pc > 0 else 0
+        comissao_classico = menor_preco * 0.115
+        comissao_premium = menor_preco * 0.165
+        taxa_fixa = 6.0 if menor_preco < 79 else 0.0
+        frete_estimado = 18.0 if menor_preco < 79 else 0.0
+        imposto = menor_preco * 0.06
+        nf = menor_preco * 0.01
+        emb = 2.0
+        avarias = menor_preco * 0.015
 
-        # Veredito
-        lucro_min = 150.0 if custo >= 3000 else (60.0 if custo >= 500 else 15.0)
-        status = "A"
-        if lucro_p <= 0 and lucro_c <= 0:
-            status = "E"
-        elif lucro_p < lucro_min or margem_p < 4.0:
-            status = "D"
+        custo_total_premium = entrada.custo + comissao_premium + taxa_fixa + frete_estimado + imposto + nf + emb + avarias
+        lucro_premium = menor_preco - custo_total_premium
+        margem_premium = (lucro_premium / menor_preco) * 100 if menor_preco > 0 else 0
 
-        resultado_json = {
+        custo_total_classico = entrada.custo + comissao_classico + taxa_fixa + frete_estimado + imposto + nf + emb + avarias
+        lucro_classico = menor_preco - custo_total_classico
+        margem_classico = (lucro_classico / menor_preco) * 100 if menor_preco > 0 else 0
+
+        status = "A" if margem_premium >= 15 else ("E" if lucro_premium < 0 else "D")
+
+        resposta_final = {
             "sucesso": True,
-            "titulo_original": req.titulo,
-            "titulo": dados_mercado.get("titulo_encontrado", req.titulo),
-            "titulo_encontrado": dados_mercado.get("titulo_encontrado", req.titulo),
-            "custo_base": custo,
+            "titulo": titulo_encontrado,
             "menor_preco": menor_preco,
-            "link": dados_mercado["link"],
-            "premium": {
-                "preco": pb, "comissao": cp_brl, "taxa_fixa": tf_p, "frete": fr_p, "imposto": ip_brl,
-                "nf": 1.0, "emb": 2.5, "avarias": avarias, "custo_total": ct_p, "lucro": lucro_p, "margem": margem_p
-            },
-            "classico": {
-                "preco": pc, "comissao": cc_brl, "taxa_fixa": tf_c, "frete": fr_c, "imposto": ic_brl,
-                "custo_total": ct_c, "lucro": lucro_c, "margem": margem_c
-            },
+            "link": link,
             "status": status,
-            "confianca": "ALTA"
+            "classico": {
+                "preco": menor_preco,
+                "comissao": comissao_classico,
+                "taxa_fixa": taxa_fixa,
+                "frete": frete_estimado,
+                "imposto": imposto,
+                "nf": nf,
+                "emb": emb,
+                "avarias": avarias,
+                "custo_total": custo_total_classico,
+                "lucro": lucro_classico,
+                "margem": round(margem_classico, 2)
+            },
+            "premium": {
+                "preco": menor_preco,
+                "comissao": comissao_premium,
+                "taxa_fixa": taxa_fixa,
+                "frete": frete_estimado,
+                "imposto": imposto,
+                "nf": nf,
+                "emb": emb,
+                "avarias": avarias,
+                "custo_total": custo_total_premium,
+                "lucro": lucro_premium,
+                "margem": round(margem_premium, 2)
+            }
         }
 
-        # 3. Persistência Automática no SQLite Local (Rastreabilidade de Campo)
         try:
-            salvar_analise(resultado_json)
+            dados_banco = {
+                "titulo_original": entrada.titulo,
+                "titulo_encontrado": titulo_encontrado,
+                "custo_base": entrada.custo,
+                "moeda": "BRL",
+                "menor_preco": menor_preco,
+                "link": link,
+                "classico": resposta_final["classico"],
+                "premium": resposta_final["premium"],
+                "status": status,
+                "origem": "WebApp",
+                "confianca": "ALTA"
+            }
+            salvar_analise(dados_banco)
         except Exception as db_err:
-            print(f"[banco] Aviso ao salvar no SQLite: {db_err}")
+            log.warning(f"Aviso SQLite: {db_err}")
 
-        return resultado_json
+        return resposta_final
 
     except Exception as e:
-        return {"sucesso": False, "mensagem": f"Erro interno no servidor: {str(e)}"}
-
-@app.post("/analisar-lote")
-def analisar_lote(req: RequisicaoLote):
-    resultados = []
-    for item in req.produtos:
-        res = analisar_produto(item)
-        resultados.append(res)
-    return {"sucesso": True, "total": len(resultados), "resultados": resultados}
+        log.error(f"Erro no processamento da análise: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

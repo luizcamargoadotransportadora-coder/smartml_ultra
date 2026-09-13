@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Smart Meli Ultra</title>
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', -apple-system, Roboto, sans-serif; }
+    body { 
+      background: linear-gradient(135deg, #060913 0%, #111827 100%); 
+      color: #ffffff; 
+      padding: 15px; 
+      display: flex; 
+      justify-content: center; 
+      min-height: 100vh;
+      align-items: flex-start;
+    }
+    .app-container { 
+      width: 100%; 
+      max-width: 440px; 
+      background: rgba(17, 24, 39, 0.7); 
+      backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 230, 0, 0.2); 
+      border-radius: 16px; 
+      padding: 20px 16px; 
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); 
+    }
+    .header { text-align: center; border-bottom: 1px solid rgba(255, 230, 0, 0.15); padding-bottom: 15px; margin-bottom: 15px; }
+    .title-text { font-size: 20px; font-weight: 900; color: #ffffff; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 5px; }
+    .title-text .highlight { color: #FFE600; }
+    .subtitle { font-size: 9px; color: #94a3b8; text-transform: uppercase; letter-spacing: 3px; font-weight: 600; }
+    .card { background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 15px; margin-bottom: 15px; }
+    label { display: block; font-size: 10px; color: #FFE600; text-transform: uppercase; font-weight: 800; margin-bottom: 6px; }
+    
+    .input-row {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    input { 
+      width: 100%; background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(255, 255, 255, 0.1); 
+      color: #ffffff; padding: 12px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; 
+    }
+    input:focus { outline: none; border-color: #FFE600; background: rgba(15, 23, 42, 0.9); }
+    input::placeholder { color: #64748b; }
+    
+    .btn-camera {
+      flex: 0 0 52px;
+      background: #FFE600;
+      border: none;
+      border-radius: 8px;
+      font-size: 20px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      box-shadow: 0 4px 10px rgba(255, 230, 0, 0.2);
+    }
+    .btn-camera:active { transform: scale(0.92); }
+
+    .btn-calc { 
+      width: 100%; background: linear-gradient(90deg, #FFE600 0%, #FFD500 100%); border: none; color: #000; 
+      font-weight: 900; padding: 14px; border-radius: 8px; cursor: pointer; font-size: 13px; text-transform: uppercase; 
+      box-shadow: 0 6px 15px rgba(255, 230, 0, 0.25); margin-top: 8px;
+    }
+    .btn-calc:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .whatsapp-bubble { display: none; background: rgba(8, 17, 30, 0.85); border: 1px solid #FFE600; border-radius: 12px; padding: 15px; font-size: 12px; line-height: 1.6; margin-top: 10px; }
+    .whatsapp-bubble.inviavel { border-color: #ef4444; }
+    .tag-header { color: #00E5FF; font-weight: 900; font-size: 11px; text-transform: uppercase; border-bottom: 1px dashed rgba(0, 229, 255, 0.3); padding-bottom: 6px; margin-bottom: 10px; }
+    .item-row { margin-bottom: 6px; color: #e2e8f0; }
+    .item-row b { color: #ffffff; }
+    .section-box { background: rgba(15, 23, 42, 0.6); border-left: 3px solid #00E5FF; padding: 10px 12px; border-radius: 8px; margin: 10px 0; }
+    .section-box.premium { border-left-color: #FFE600; background: rgba(30, 41, 59, 0.5); }
+    .copy-btn { width: 100%; background: #00a884; border: none; color: #ffffff; font-weight: 800; padding: 12px; border-radius: 8px; cursor: pointer; font-size: 12px; margin-top: 12px; text-transform: uppercase; display: none; }
+    .action-row { display: flex; gap: 10px; margin-top: 15px; }
+    .btn-action { flex: 1; padding: 12px; border-radius: 8px; font-size: 11px; font-weight: 800; cursor: pointer; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.3); color: #cbd5e1; text-transform: uppercase; }
+
+    /* MODAL DE CÂMERA DUAL (BARRAS + FOTO DA CAIXA) */
+    #scannerModal {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(0, 0, 0, 0.95);
+      z-index: 9999;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 15px;
+    }
+    .scanner-box {
+      width: 100%;
+      max-width: 420px;
+      background: #111827;
+      border: 1px solid #FFE600;
+      border-radius: 12px;
+      padding: 16px;
+      text-align: center;
+    }
+    #readerVideo {
+      width: 100%;
+      min-height: 250px;
+      background: #000;
+      border-radius: 8px;
+      overflow: hidden;
+      margin: 10px 0;
+    }
+    .cam-actions {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .btn-foto-caixa {
+      width: 100%;
+      background: #00E5FF;
+      color: #000;
+      font-weight: 900;
+      border: none;
+      padding: 12px;
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 12px;
+      text-transform: uppercase;
+    }
+    .btn-cancelar {
+      width: 100%;
+      background: #ef4444;
+      color: #fff;
+      border: none;
+      padding: 10px;
+      border-radius: 8px;
+      font-weight: 800;
+      cursor: pointer;
+      font-size: 11px;
+    }
+  </style>
+</head>
+<body>
+  <div class="app-container">
+    <div class="header">
+      <div class="title-text">🤖 SMART <span class="highlight">MELI</span> ULTRA</div>
+      <div class="subtitle">Auditoria de Alta Performance</div>
+    </div>
+    
+    <div class="card">
+      <label>PRODUTO / SKU / RASTREIO</label>
+      <div class="input-row">
+        <input id="inProd" type="text" placeholder="Cole o Link, MLB ou escaneie...">
+        <button type="button" class="btn-camera" onclick="abrirCamera()" title="Câmera: Código ou Foto">📷</button>
+      </div>
+
+      <label>CUSTO BASE (R$)</label>
+      <div style="margin-bottom: 8px;">
+        <input id="inCusto" type="number" step="0.01" placeholder="Ex: 50,00">
+      </div>
+
+      <button class="btn-calc" id="btnAcao" onclick="executarCalculo()">Auditar Concorrência ⚡</button>
+    </div>
+    
+    <div id="resBox" class="whatsapp-bubble"></div>
+    <button id="btnCopiar" class="copy-btn" onclick="copiarWhatsApp()">📋 COPIAR RELATÓRIO WA</button>
+    
+    <div class="action-row" id="areaBotoes">
+      <button class="btn-action" onclick="novoCalculo()">➕ Novo Dossiê</button>
+    </div>
+  </div>
+
+  <!-- MODAL DA CÂMERA -->
+  <div id="scannerModal">
+    <div class="scanner-box">
+      <h3 style="color: #FFE600; font-size: 15px; margin-bottom: 2px;">Câmera Inteligente</h3>
+      <p id="camStatus" style="color: #94a3b8; font-size: 11px;">Bipe o código de barras OU tire foto da embalagem</p>
+      
+      <div id="readerVideo"></div>
+
+      <div class="cam-actions">
+        <button type="button" class="btn-foto-caixa" id="btnSnap" onclick="capturarFotoCaixa()">📸 TIRAR FOTO DA CAIXA (IA)</button>
+        <button type="button" class="btn-cancelar" onclick="fecharCamera()">CANCELAR</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let dossieWhats = "";
+    let html5QrScanner = null;
+
+    // 1. SCANNER CONTÍNUO (BARRAS) + FOTO DA EMBALAGEM
+    function abrirCamera() {
+      document.getElementById('scannerModal').style.display = 'flex';
+      document.getElementById('camStatus').innerText = "Bipe o código OU tire foto da embalagem";
+      document.getElementById('btnSnap').innerText = "📸 TIRAR FOTO DA CAIXA (IA)";
+      document.getElementById('btnSnap').disabled = false;
+
+      if (!html5QrScanner) {
+        html5QrScanner = new Html5Qrcode("readerVideo");
+      }
+
+      const config = { fps: 30, qrbox: { width: 280, height: 120 } };
+
+      html5QrScanner.start(
+        { facingMode: "environment" },
+        config,
+        (decodedText) => {
+          tocarBipe();
+          document.getElementById('inProd').value = decodedText.trim();
+          fecharCamera();
+          document.getElementById('inCusto').focus();
+        },
+        (err) => {}
+      ).catch((err) => {
+        alert("Acesso à câmera bloqueado. Permita a câmera no seu navegador.");
+        fecharCamera();
+      });
+    }
+
+    // CAPTURA FRAME DE VÍDEO E MANDA PARA GEMINI VISION
+    async function capturarFotoCaixa() {
+      const videoElem = document.querySelector("#readerVideo video");
+      if (!videoElem) {
+        alert("Câmera ainda não carregou o vídeo.");
+        return;
+      }
+
+      const btnSnap = document.getElementById('btnSnap');
+      const camStatus = document.getElementById('camStatus');
+      btnSnap.innerText = "Lendo embalagem com IA...";
+      btnSnap.disabled = true;
+      camStatus.innerText = "Reconhecendo marca e modelo via IA...";
+
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = videoElem.videoWidth || 640;
+        canvas.height = videoElem.videoHeight || 480;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(videoElem, 0, 0, canvas.width, canvas.height);
+        const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+
+        const resp = await fetch('/reconhecer-imagem', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imagem_base64: dataUrl })
+        });
+
+        const res = await resp.json();
+        if (res.sucesso && res.produto) {
+          tocarBipe();
+          document.getElementById('inProd').value = res.produto;
+          fecharCamera();
+          document.getElementById('inCusto').focus();
+        } else {
+          alert(res.mensagem || "Não foi possível identificar o produto na foto. Tente aproximar da marca/modelo.");
+          btnSnap.innerText = "📸 TIRAR FOTO DA CAIXA (IA)";
+          btnSnap.disabled = false;
+          camStatus.innerText = "Bipe o código OU tire foto da embalagem";
+        }
+      } catch (e) {
+        alert("Erro de conexão com o servidor local: " + e.message);
+        btnSnap.innerText = "📸 TIRAR FOTO DA CAIXA (IA)";
+        btnSnap.disabled = false;
+        camStatus.innerText = "Bipe o código OU tire foto da embalagem";
+      }
+    }
+
+    function fecharCamera() {
+      if (html5QrScanner) {
+        html5QrScanner.stop().then(() => {
+          document.getElementById('scannerModal').style.display = 'none';
+        }).catch(() => {
+          document.getElementById('scannerModal').style.display = 'none';
+        });
+      } else {
+        document.getElementById('scannerModal').style.display = 'none';
+      }
+    }
+
+    function tocarBipe() {
+      try {
+        const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = ctx.createOscillator();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1000, ctx.currentTime);
+        osc.connect(ctx.destination);
+        osc.start();
+        osc.stop(ctx.currentTime + 0.15);
+      } catch (e) {}
+    }
+
+    // 2. AUDITORIA CONTÁBIL
+    async function executarCalculo() {
+      const prod = document.getElementById('inProd').value.trim();
+      const custo = parseFloat(document.getElementById('inCusto').value);
+      if (!prod || isNaN(custo) || custo <= 0) return alert('Insira o produto e o custo base.');
+
+      const btn = document.getElementById('btnAcao');
+      btn.innerText = 'Buscando Oportunidades... ⚡'; 
+      btn.disabled = true;
+      document.getElementById('resBox').style.display = 'none'; 
+      document.getElementById('btnCopiar').style.display = 'none';
+
+      try {
+        const resp = await fetch('/analisar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ titulo: prod, custo: custo })
+        });
+
+        const res = await resp.json();
+        btn.innerText = 'Auditar Concorrência ⚡'; 
+        btn.disabled = false;
+
+        const resBox = document.getElementById('resBox');
+
+        if (!res.sucesso) {
+          resBox.className = 'whatsapp-bubble inviavel';
+          resBox.innerHTML = '<div style="text-align:center; color:#ef4444; font-weight:800; font-size:13px;">' + (res.mensagem || 'Produto não encontrado.') + '</div>';
+          resBox.style.display = 'block';
+          return;
+        }
+
+        const p = res.premium;
+        const c = res.classico;
+        const cM = res.status === 'E' ? 'color:#ef4444;' : (res.status === 'D' ? 'color:#FFE600;' : 'color:#00FF88;');
+        const viabTexto = res.status === 'A' ? '🟢 OPORTUNIDADE ALTAMENTE VIÁVEL' : (res.status === 'E' ? '🔴 INVIÁVEL: PREJUÍZO' : '🟡 MARGEM CRÍTICA');
+
+        dossieWhats = `⚡ SMART MELI | AUDITORIA\n\n📦 *ATIVO:* ${res.titulo}\n💵 *Custo:* R$ ${custo.toFixed(2)}\n🎯 *Buybox:* R$ ${res.menor_preco.toFixed(2)}\n\n🏆 *PREMIUM:* Lucro R$ ${p.lucro.toFixed(2)} (${p.margem}%)\n📊 *CLÁSSICO:* Lucro R$ ${c.lucro.toFixed(2)} (${c.margem}%)\n\n📈 *Status:* ${viabTexto}\n🔗 *Link:* ${res.link}`;
+
+        resBox.className = 'whatsapp-bubble';
+        if (res.status === 'E') resBox.classList.add('inviavel');
+
+        resBox.innerHTML = 
+          '<div class="tag-header">⚡ SMART MELI | AUDITORIA</div>' +
+          '<div class="item-row">📦 <b>ATIVO:</b> ' + res.titulo + '</div>' +
+          '<div class="item-row">💵 <b>CUSTO:</b> R$ ' + custo.toFixed(2).replace('.', ',') + '</div>' +
+          '<div class="item-row" style="margin-top:8px;">🎯 <b>ALVO BUYBOX:</b> <span style="font-weight:900; font-size:14px; ' + cM + '">R$ ' + res.menor_preco.toFixed(2).replace('.', ',') + '</span></div>' +
+          '<div class="section-box"><div style="font-weight:800;font-size:10.5px;color:#00E5FF;margin-bottom:4px;">📊 CLÁSSICO (11,5%)</div>' +
+          '<div style="display:flex; justify-content:space-between;"><span>Venda: <b>R$ ' + c.preco.toFixed(2).replace('.', ',') + '</b></span>' +
+          '<span>Lucro: <b style="' + cM + '">R$ ' + c.lucro.toFixed(2).replace('.', ',') + ' (' + c.margem + '%)</b></span></div></div>' +
+          '<div class="section-box premium"><div style="font-weight:800;font-size:10.5px;color:#FFE600;margin-bottom:4px;">🏆 PREMIUM (16,5%)</div>' +
+          '<div style="display:flex; justify-content:space-between;"><span>Venda: <b>R$ ' + p.preco.toFixed(2).replace('.', ',') + '</b></span>' +
+          '<span>Lucro: <b style="' + cM + '">R$ ' + p.lucro.toFixed(2).replace('.', ',') + ' (' + p.margem + '%)</b></span></div></div>' +
+          '<div class="item-row" style="margin-top:10px;">📈 <b>VEREDITO:</b> ' + viabTexto + '</div>';
+
+        resBox.style.display = 'block';
+        document.getElementById('btnCopiar').style.display = 'block';
+
+      } catch (err) {
+        btn.innerText = 'Auditar Concorrência ⚡'; 
+        btn.disabled = false;
+        alert('Erro de conexão com o servidor local.');
+      }
+    }
+
+    function copiarWhatsApp() {
+      if (!dossieWhats) return;
+      navigator.clipboard.writeText(dossieWhats);
+      document.getElementById('btnCopiar').innerText = '✅ Relatório Copiado!';
+      setTimeout(() => { document.getElementById('btnCopiar').innerText = '📋 COPIAR RELATÓRIO WA'; }, 2000);
+    }
+
+    function novoCalculo() {
+      document.getElementById('inProd').value = ''; 
+      document.getElementById('inCusto').value = '';
+      document.getElementById('resBox').style.display = 'none'; 
+      document.getElementById('btnCopiar').style.display = 'none';
+      document.getElementById('inProd').focus();
+    }
+  </script>
+</body>
+</html>
