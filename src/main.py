@@ -23,30 +23,28 @@ app = FastAPI(title="Smart Meli Ultra API", version="11.2")
 logging.basicConfig(level=logging.INFO)
 log = logging.getLogger("smartml.main")
 
-# Chave protegida em Base64 para contornar bloqueios do GitHub e revogação automática
 _CHAVE_CODIFICADA = "QVEuQWI4Uk42Snk1Q2JsTmdvUzBKbG9UQmMzYU1IZU9DX3hMNWY5QWJwVDZuRnBiLTNmdGc="
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", base64.b64decode(_CHAVE_CODIFICADA).decode("utf-8")).strip()
+GEMINI_API_KEY = base64.b64decode(_CHAVE_CODIFICADA).decode("utf-8").strip()
 
 @app.get("/")
 def abrir_aplicativo():
-    caminho_html = os.path.join(os.getcwd(), "static", "index.html")
-    if os.path.exists(caminho_html):
-        return FileResponse(caminho_html)
-    return {"erro": "Arquivo static/index.html não encontrado no servidor."}
+    for pasta in ["static", "estatico", "estático"]:
+        caminho = os.path.join(os.getcwd(), pasta, "index.html")
+        if os.path.exists(caminho):
+            return FileResponse(caminho)
+    return {"erro": "index.html não encontrado no servidor."}
 
 class EntradaImagem(BaseModel):
     imagem_base64: str
 
 @app.post("/reconhecer-imagem")
 def reconhecer_imagem(entrada: EntradaImagem):
-    # Envio duplo da chave (Query String + Header) para compatibilidade com chaves AQ
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GEMINI_API_KEY}"
     
     base64_data = entrada.imagem_base64
     if "," in base64_data:
         base64_data = base64_data.split(",")[1]
 
-    # Pipeline de compressão rápida
     try:
         img_bytes = base64.b64decode(base64_data)
         img = Image.open(io.BytesIO(img_bytes))
@@ -71,8 +69,8 @@ def reconhecer_imagem(entrada: EntradaImagem):
             "parts": [
                 {"text": prompt},
                 {
-                    "inline_data": {
-                        "mime_type": "image/jpeg",
+                    "inlineData": {
+                        "mimeType": "image/jpeg",
                         "data": base64_data
                     }
                 }
@@ -85,7 +83,7 @@ def reconhecer_imagem(entrada: EntradaImagem):
 
     headers = {
         "Content-Type": "application/json",
-        "X-goog-api-key": GEMINI_API_KEY
+        "x-goog-api-key": GEMINI_API_KEY
     }
 
     try:
@@ -112,9 +110,9 @@ def reconhecer_imagem(entrada: EntradaImagem):
     except urllib.error.HTTPError as he:
         err_msg = he.read().decode("utf-8")
         log.error(f"Erro HTTP Gemini ({he.code}): {err_msg}")
-        return {"sucesso": False, "mensagem": f"Erro Google ({he.code}): {err_msg[:120]}"}
+        return {"sucesso": False, "mensagem": f"Erro Google ({he.code}): {err_msg[:140]}"}
     except Exception as e:
-        log.error(f"Falha de conexão com Gemini: {e}")
+        log.error(f"Falha de conexão: {e}")
         return {"sucesso": False, "mensagem": f"Erro: {str(e)}"}
 
 class EntradaAnalise(BaseModel):
@@ -125,7 +123,6 @@ class EntradaAnalise(BaseModel):
 def analisar_produto(entrada: EntradaAnalise):
     try:
         log.info(f"Iniciando auditoria: {entrada.titulo} | Custo: R$ {entrada.custo}")
-        
         resultado_scraper = buscar_menor_preco_ml(entrada.titulo, entrada.custo)
         
         if not resultado_scraper.get("encontrado"):
