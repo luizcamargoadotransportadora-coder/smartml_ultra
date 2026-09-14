@@ -18,6 +18,8 @@ def buscar_menor_preco_ml(termo, custo_base=0.0):
 
         r = requests.get(url, headers=headers, timeout=15)
         soup = BeautifulSoup(r.text, "html.parser")
+        page_title = soup.title.text.strip() if soup.title else "Sem titulo"
+        
         cards = soup.select(".poly-card, .ui-search-layout__item, div.ui-search-result__wrapper")
         anuncios = []
         ignorar = ["capa", "capinha", "pelicula", "película", "cabo", "carregador", "suporte", "adaptador", "case"]
@@ -49,7 +51,10 @@ def buscar_menor_preco_ml(termo, custo_base=0.0):
                 anuncios.append({"titulo": tit, "preco": p, "link": lnk})
 
         if not anuncios:
-            return {"encontrado": False, "mensagem": f"Nenhum anuncio valido para {termo}."}
+            return {
+                "encontrado": False, 
+                "mensagem": f"Zero anuncios. Status: {r.status_code} | Tam: {len(r.text)} | Cards: {len(cards)} | Titulo: {page_title}"
+            }
 
         if custo_base > 0:
             validos = [a for a in anuncios if a["preco"] >= (custo_base * 0.3)]
