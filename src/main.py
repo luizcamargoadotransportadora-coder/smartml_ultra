@@ -40,7 +40,7 @@ class EntradaImagem(BaseModel):
 @app.post("/reconhecer-imagem")
 def reconhecer_imagem(entrada: EntradaImagem):
     # Envio duplo da chave (Query String + Header) para compatibilidade com chaves AQ
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={GEMINI_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
     
     base64_data = entrada.imagem_base64
     if "," in base64_data:
