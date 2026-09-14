@@ -11,14 +11,16 @@ def buscar_menor_preco_ml(termo, custo_base=0.0):
         url = f"https://lista.mercadolivre.com.br/{termo_slug}"
 
         headers = {
-            "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "pt-BR,pt;q=0.9"
+            "Accept-Language": "pt-BR,pt;q=0.9",
+            "Cookie": "country_id=MLB; currency_id=BRL; c_country=BR"
         }
 
-        r = requests.get(url, headers=headers, timeout=15)
+        r = requests.get(url, headers=headers, impersonate="chrome120", timeout=15)
         soup = BeautifulSoup(r.text, "html.parser")
         page_title = soup.title.text.strip() if soup.title else "Sem titulo"
+        body_text = " ".join(soup.body.get_text().split())[:250] if soup.body else ""
         
         cards = soup.select(".poly-card, .ui-search-layout__item, div.ui-search-result__wrapper")
         anuncios = []
@@ -53,7 +55,7 @@ def buscar_menor_preco_ml(termo, custo_base=0.0):
         if not anuncios:
             return {
                 "encontrado": False, 
-                "mensagem": f"Zero anuncios. Status: {r.status_code} | Tam: {len(r.text)} | Cards: {len(cards)} | Titulo: {page_title}"
+                "mensagem": f"Cards: {len(cards)} | Titulo: {page_title} | Trecho: {body_text}"
             }
 
         if custo_base > 0:
