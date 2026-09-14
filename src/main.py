@@ -37,7 +37,7 @@ class EntradaImagem(BaseModel):
 
 @app.post("/reconhecer-imagem")
 def reconhecer_imagem(entrada: EntradaImagem):
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent"
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent"
     
     base64_data = entrada.imagem_base64
     if "," in base64_data:
