@@ -159,6 +159,7 @@ def analisar_produto(entrada: EntradaAnalise):
             "titulo": titulo_encontrado,
             "menor_preco": menor_preco,
             "link": link,
+            "imagem": resultado_scraper.get("imagem", ""),
             "status": status,
             "classico": {
                 "preco": menor_preco,
@@ -196,6 +197,7 @@ def analisar_produto(entrada: EntradaAnalise):
                 "moeda": "BRL",
                 "menor_preco": menor_preco,
                 "link": link,
+            "imagem": resultado_scraper.get("imagem", ""),
                 "classico": resposta_final["classico"],
                 "premium": resposta_final["premium"],
                 "status": status,
