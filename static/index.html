@@ -48,7 +48,14 @@
       }
     }
 
-    
+    function enviarWhatsAppDireto() {
+      if (!dossieWhats) {
+        alert('Realize uma auditoria primeiro.');
+        return;
+      }
+      const url = 'https://api.whatsapp.com/send?text=' + encodeURIComponent(dossieWhats);
+      window.open(url, '_blank');
+    }
 </script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', -apple-system, Roboto, sans-serif; }
@@ -607,15 +614,6 @@
         btn.innerText = 'Auditar Concorrência ⚡'; 
         btn.disabled = false;
         alert('Erro de conexão com o servidor local.');
-      }
-    }
-
-    function enviarWhatsAppDireto() {
-      if (!dossieWhats) return alert('Realize uma auditoria primeiro.');
-      const url = 'https://api.whatsapp.com/send?text=' + encodeURIComponent(dossieWhats);
-      const w = window.open(url, '_blank');
-      if (!w || w.closed || typeof w.closed === 'undefined') {
-        window.location.href = url;
       }
     }
 
