@@ -583,7 +583,7 @@
 ` +
                         `🎯 *Menor Preço ML:* R$ ${res.menor_preco.toFixed(2)}
 ` +
-                        `💵 *Seu Custo Base:* R$ ${res.custo_base.toFixed(2)}
+                        `💵 *Seu Custo Base:* R$ ${(res.custo_base || custo || 0).toFixed(2)}
 
 ` +
                         `⚡ *ML Clássico (11.5%):* Lucro R$ ${c.lucro.toFixed(2)} (${c.margem.toFixed(1)}%)
