@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
@@ -41,45 +41,14 @@
       const prev = document.getElementById('previewConversao');
       if (moedaAtual === 'USD' && !isNaN(val) && val > 0) {
         const brl = (val * COTACAO_USD).toFixed(2);
-        prev.innerText = '≈ R$ ' + brl + ' (Câmbio: US$ 1 = R$ ' + COTACAO_USD.toFixed(2) + ')';
+        prev.innerText = 'â‰ˆ R$ ' + brl + ' (CÃ¢mbio: US$ 1 = R$ ' + COTACAO_USD.toFixed(2) + ')';
         prev.style.display = 'block';
       } else {
         prev.style.display = 'none';
       }
     }
 
-    function enviarWhatsAppDireto() {
-      if (!dadosUltimoRelatorio) return alert('Realize uma auditoria primeiro.');
-      const r = dadosUltimoRelatorio;
-      const c = r.classico;
-      const p = r.premium;
-      const st = r.status === 'A' ? '🟢 OPORTUNIDADE' : (r.status === 'E' ? '🔴 PREJUÍZO' : '🟡 MARGEM CRÍTICA');
-      const msg = `*🤖 SMART MELI ULTRA | AUDITORIA HUD*
-
-` +
-                  `📦 *Produto:* ${r.titulo_encontrado || r.titulo}
-` +
-                  `🎯 *Menor Preço ML:* R$ ${r.menor_preco.toFixed(2)}
-` +
-                  `💵 *Seu Custo Base:* R$ ${r.custo_base.toFixed(2)} (${moedaAtual})
-
-` +
-                  `📊 *VIABILIDADE DE VENDA:*
-` +
-                  `⚡ *ML Clássico (11.5%):* Lucro R$ ${c.lucro.toFixed(2)} | Margem ${c.margem.toFixed(1)}%
-` +
-                  `💎 *ML Premium (16.5%):* Lucro R$ ${p.lucro.toFixed(2)} | Margem ${p.margem.toFixed(1)}%
-
-` +
-                  `🚦 *Status:* ${st}
-` +
-                  `🔗 *Link do Concorrente:* ${r.link}
-
-` +
-                  `_Auditado via Smart Meli Ultra Core_`;
-      window.open('https://api.whatsapp.com/send?text=' + encodeURIComponent(msg), '_blank');
-    }
-</script>
+    function enviarWhatsAppDireto() { if (!dossieWhats) return alert('Realize uma auditoria primeiro.'); const a = document.createElement('a'); a.href = 'https://api.whatsapp.com/send?text=' + encodeURIComponent(dossieWhats); a.target = '_blank'; a.rel = 'noopener noreferrer'; document.body.appendChild(a); a.click(); document.body.removeChild(a); }</script>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', -apple-system, Roboto, sans-serif; }
     body { 
@@ -152,7 +121,7 @@
     .action-row { display: flex; gap: 10px; margin-top: 15px; }
     .btn-action { flex: 1; padding: 12px; border-radius: 8px; font-size: 11px; font-weight: 800; cursor: pointer; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.3); color: #cbd5e1; text-transform: uppercase; }
 
-    /* MODAL DE CÂMERA DUAL (BARRAS + FOTO DA CAIXA) */
+    /* MODAL DE CÃ‚MERA DUAL (BARRAS + FOTO DA CAIXA) */
     #scannerModal {
       display: none;
       position: fixed;
@@ -335,15 +304,15 @@
 <body>
   <div class="app-container">
     <div class="header">
-      <div class="title-text">🤖 SMART <span class="highlight">MELI</span> ULTRA</div>
-      <div class="subtitle">Análise de alta performance</div>
+      <div class="title-text">ðŸ¤– SMART <span class="highlight">MELI</span> ULTRA</div>
+      <div class="subtitle">AnÃ¡lise de alta performance</div>
     </div>
     
     <div class="card">
       <label>PRODUTO / SKU / EAN</label>
       <div class="input-row">
         <input id="inProd" type="text" placeholder="Cole o Link, MLB ou escaneie...">
-        <button type="button" class="btn-camera" onclick="abrirCamera()" title="Câmera: Código ou Foto">📷</button>
+        <button type="button" class="btn-camera" onclick="abrirCamera()" title="CÃ¢mera: CÃ³digo ou Foto">ðŸ“·</button>
       </div>
 
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
@@ -358,63 +327,63 @@
       </div>
       <div id="previewConversao" style="display: none; font-size: 11px; color: #FFE600; font-weight: 700; margin-bottom: 8px;"></div>
 
-      <button class="btn-calc" id="btnAcao" onclick="executarCalculo()">ANALISAR VIABILIDADE ⚡</button>
+      <button class="btn-calc" id="btnAcao" onclick="executarCalculo()">ANALISAR VIABILIDADE âš¡</button>
     </div>
     
     <div class="action-row" id="areaBotoes" style="margin-top: 10px;">
-        <button type="button" class="btn-action" onclick="novoCalculo()">+ NOVA ANÁLISE</button>
+        <button type="button" class="btn-action" onclick="novoCalculo()">+ NOVA ANÃLISE</button>
       </div>
 
       <!-- PAINEL COCKPIT HUD -->
       <div id="hudPainel" class="hud-panel">
         <div class="hud-header">
-          <span class="hud-tag" style="color: #00E5FF;">⚡ RADAR AUDITORIA</span>
-          <span id="hudStatusBadge" class="badge-status">VIÁVEL</span>
+          <span class="hud-tag" style="color: #00E5FF;">âš¡ RADAR AUDITORIA</span>
+          <span id="hudStatusBadge" class="badge-status">VIÃVEL</span>
         </div>
 
         <div class="hud-product-card">
           <img id="hudImg" class="hud-thumb" src="" alt="Produto">
           <div class="hud-pdetails">
-            <div id="hudTitulo" class="hud-title">Título do Concorrente</div>
+            <div id="hudTitulo" class="hud-title">TÃ­tulo do Concorrente</div>
             <div class="hud-price" id="hudPreco">R$ 0,00</div>
-            <a id="hudLink" class="hud-link" href="#" target="_blank">🔗 INSPECIONAR ANÚNCIO NO ML</a>
+            <a id="hudLink" class="hud-link" href="#" target="_blank">ðŸ”— INSPECIONAR ANÃšNCIO NO ML</a>
           </div>
         </div>
 
         <div class="viab-grid">
           <div class="viab-box" id="cardClassico">
-            <div class="viab-lbl" style="color: #00E5FF;">ML CLÁSSICO</div>
-            <div class="viab-lbl">LUCRO LÍQUIDO</div>
+            <div class="viab-lbl" style="color: #00E5FF;">ML CLÃSSICO</div>
+            <div class="viab-lbl">LUCRO LÃQUIDO</div>
             <div class="viab-lucro" id="hudLucroC">R$ 0,00</div>
             <div class="viab-margem" id="hudMargemC">Margem: 0%</div>
           </div>
           <div class="viab-box prem" id="cardPremium">
             <div class="viab-lbl" style="color: #FFE600;">ML PREMIUM</div>
-            <div class="viab-lbl">LUCRO LÍQUIDO</div>
+            <div class="viab-lbl">LUCRO LÃQUIDO</div>
             <div class="viab-lucro" id="hudLucroP">R$ 0,00</div>
             <div class="viab-margem" id="hudMargemP">Margem: 0%</div>
           </div>
         </div>
 
         <button type="button" class="btn-send-wpp" onclick="enviarWhatsAppDireto()">
-          📲 TRANSMITIR VIA WHATSAPP
+          ðŸ“² TRANSMITIR VIA WHATSAPP
         </button>
         <button type="button" class="copy-btn" id="btnCopiar" style="display: block; margin-top: 0;" onclick="copiarWhatsApp()">
-          📋 COPIAR RELATÓRIO TÉCNICO
+          ðŸ“‹ COPIAR RELATÃ“RIO TÃ‰CNICO
         </button>
       </div>
   </div>
 
-  <!-- MODAL DA CÂMERA -->
+  <!-- MODAL DA CÃ‚MERA -->
   <div id="scannerModal">
     <div class="scanner-box">
-      <h3 style="color: #FFE600; font-size: 15px; margin-bottom: 2px;">Câmera Inteligente</h3>
-      <p id="camStatus" style="color: #94a3b8; font-size: 11px;">Bipe o código de barras OU tire foto da embalagem</p>
+      <h3 style="color: #FFE600; font-size: 15px; margin-bottom: 2px;">CÃ¢mera Inteligente</h3>
+      <p id="camStatus" style="color: #94a3b8; font-size: 11px;">Bipe o cÃ³digo de barras OU tire foto da embalagem</p>
       
       <div id="readerVideo"></div>
 
       <div class="cam-actions">
-        <button type="button" class="btn-foto-caixa" id="btnSnap" onclick="capturarFotoCaixa()">📸 TIRAR FOTO DA CAIXA (IA)</button>
+        <button type="button" class="btn-foto-caixa" id="btnSnap" onclick="capturarFotoCaixa()">ðŸ“¸ TIRAR FOTO DA CAIXA (IA)</button>
         <button type="button" class="btn-cancelar" onclick="fecharCamera()">CANCELAR</button>
       </div>
     </div>
@@ -424,11 +393,11 @@
     let dossieWhats = "";
     let html5QrScanner = null;
 
-    // 1. SCANNER CONTÍNUO (BARRAS) + FOTO DA EMBALAGEM
+    // 1. SCANNER CONTÃNUO (BARRAS) + FOTO DA EMBALAGEM
     function abrirCamera() {
       document.getElementById('scannerModal').style.display = 'flex';
-      document.getElementById('camStatus').innerText = "Bipe o código OU tire foto da embalagem";
-      document.getElementById('btnSnap').innerText = "📸 TIRAR FOTO DA CAIXA (IA)";
+      document.getElementById('camStatus').innerText = "Bipe o cÃ³digo OU tire foto da embalagem";
+      document.getElementById('btnSnap').innerText = "ðŸ“¸ TIRAR FOTO DA CAIXA (IA)";
       document.getElementById('btnSnap').disabled = false;
 
       if (!html5QrScanner) {
@@ -448,16 +417,16 @@
         },
         (err) => {}
       ).catch((err) => {
-        alert("Acesso à câmera bloqueado. Permita a câmera no seu navegador.");
+        alert("Acesso Ã  cÃ¢mera bloqueado. Permita a cÃ¢mera no seu navegador.");
         fecharCamera();
       });
     }
 
-    // CAPTURA FRAME DE VÍDEO E MANDA PARA GEMINI VISION
+    // CAPTURA FRAME DE VÃDEO E MANDA PARA GEMINI VISION
     async function capturarFotoCaixa() {
       const videoElem = document.querySelector("#readerVideo video");
       if (!videoElem) {
-        alert("Câmera ainda não carregou o vídeo.");
+        alert("CÃ¢mera ainda nÃ£o carregou o vÃ­deo.");
         return;
       }
 
@@ -488,16 +457,16 @@
           fecharCamera();
           document.getElementById('inCusto').focus();
         } else {
-          alert(res.mensagem || "Não foi possível identificar o produto na foto. Tente aproximar da marca/modelo.");
-          btnSnap.innerText = "📸 TIRAR FOTO DA CAIXA (IA)";
+          alert(res.mensagem || "NÃ£o foi possÃ­vel identificar o produto na foto. Tente aproximar da marca/modelo.");
+          btnSnap.innerText = "ðŸ“¸ TIRAR FOTO DA CAIXA (IA)";
           btnSnap.disabled = false;
-          camStatus.innerText = "Bipe o código OU tire foto da embalagem";
+          camStatus.innerText = "Bipe o cÃ³digo OU tire foto da embalagem";
         }
       } catch (e) {
-        alert("Erro de conexão com o servidor local: " + e.message);
-        btnSnap.innerText = "📸 TIRAR FOTO DA CAIXA (IA)";
+        alert("Erro de conexÃ£o com o servidor local: " + e.message);
+        btnSnap.innerText = "ðŸ“¸ TIRAR FOTO DA CAIXA (IA)";
         btnSnap.disabled = false;
-        camStatus.innerText = "Bipe o código OU tire foto da embalagem";
+        camStatus.innerText = "Bipe o cÃ³digo OU tire foto da embalagem";
       }
     }
 
@@ -525,14 +494,14 @@
       } catch (e) {}
     }
 
-    // 2. AUDITORIA CONTÁBIL
+    // 2. AUDITORIA CONTÃBIL
     async function executarCalculo() {
       const prod = document.getElementById('inProd').value.trim();
       const custo = getCustoNumerico();
       if (!prod || isNaN(custo) || custo <= 0) return alert('Insira o produto e o custo base.');
 
       const btn = document.getElementById('btnAcao');
-      btn.innerText = 'Buscando Oportunidades... ⚡'; 
+      btn.innerText = 'Buscando Oportunidades... âš¡'; 
       btn.disabled = true;
       const _rb = document.getElementById('resBox'); if (_rb) _rb.style.display = 'none'; const _hud = document.getElementById('hudPainel'); if (_hud) _hud.style.display = 'none'; 
       const _bc = document.getElementById('btnCopiar'); if (_bc) _bc.style.display = 'none';
@@ -545,10 +514,10 @@
         });
 
         const res = await resp.json();
-        btn.innerText = 'Auditar Concorrência ⚡'; 
+        btn.innerText = 'Auditar ConcorrÃªncia âš¡'; 
         
           dadosUltimoRelatorio = res;
-          btn.innerText = 'ANALISAR VIABILIDADE ⚡';
+          btn.innerText = 'ANALISAR VIABILIDADE âš¡';
           btn.disabled = false;
 
           const hud = document.getElementById('hudPainel');
@@ -557,10 +526,10 @@
           if (!res.sucesso) {
             hud.className = 'hud-panel status-E';
             hud.style.display = 'block';
-            stBadge.innerText = '🔴 NÃO LOCALIZADO';
+            stBadge.innerText = 'ðŸ”´ NÃƒO LOCALIZADO';
             stBadge.style.background = 'rgba(239,68,68,0.2)';
             stBadge.style.color = '#ef4444';
-            document.getElementById('hudTitulo').innerText = res.mensagem || 'Concorrência não encontrada.';
+            document.getElementById('hudTitulo').innerText = res.mensagem || 'ConcorrÃªncia nÃ£o encontrada.';
             document.getElementById('hudPreco').innerText = '---';
             document.getElementById('hudImg').src = 'https://http2.mlstatic.com/frontend-assets/ui-navigation/5.18.9/mercadolibre/logo__small.png';
             document.getElementById('hudLink').style.display = 'none';
@@ -568,7 +537,7 @@
           }
 
           hud.className = 'hud-panel status-' + res.status;
-          stBadge.innerText = res.status === 'A' ? '🟢 OPORTUNIDADE' : (res.status === 'E' ? '🔴 PREJUÍZO' : '🟡 MARGEM CRÍTICA');
+          stBadge.innerText = res.status === 'A' ? 'ðŸŸ¢ OPORTUNIDADE' : (res.status === 'E' ? 'ðŸ”´ PREJUÃZO' : 'ðŸŸ¡ MARGEM CRÃTICA');
           stBadge.style.background = res.status === 'A' ? 'rgba(0,255,136,0.15)' : (res.status === 'E' ? 'rgba(239,68,68,0.15)' : 'rgba(255,230,0,0.15)');
           stBadge.style.color = res.status === 'A' ? '#00FF88' : (res.status === 'E' ? '#ef4444' : '#FFE600');
 
@@ -593,22 +562,22 @@
           document.getElementById('hudMargemP').innerText = 'Margem: ' + p.margem.toFixed(1) + '%';
           document.getElementById('hudMargemP').style.color = p.margem >= 15 ? '#00FF88' : (p.margem > 0 ? '#FFE600' : '#ef4444');
 
-          dossieWhats = `*🤖 SMART MELI ULTRA | AUDITORIA*
+          dossieWhats = `*ðŸ¤– SMART MELI ULTRA | AUDITORIA*
 
 ` +
-                        `📦 *Produto:* ${res.titulo_encontrado || res.titulo}
+                        `ðŸ“¦ *Produto:* ${res.titulo_encontrado || res.titulo}
 ` +
-                        `🎯 *Menor Preço ML:* R$ ${res.menor_preco.toFixed(2)}
+                        `ðŸŽ¯ *Menor PreÃ§o ML:* R$ ${res.menor_preco.toFixed(2)}
 ` +
-                        `💵 *Seu Custo Base:* R$ ${(res.custo_base || custo || 0).toFixed(2)}
+                        `ðŸ’µ *Seu Custo Base:* R$ ${(res.custo_base || custo || 0).toFixed(2)}
 
 ` +
-                        `⚡ *ML Clássico (11.5%):* Lucro R$ ${c.lucro.toFixed(2)} (${c.margem.toFixed(1)}%)
+                        `âš¡ *ML ClÃ¡ssico (11.5%):* Lucro R$ ${c.lucro.toFixed(2)} (${c.margem.toFixed(1)}%)
 ` +
-                        `💎 *ML Premium (16.5%):* Lucro R$ ${p.lucro.toFixed(2)} (${p.margem.toFixed(1)}%)
+                        `ðŸ’Ž *ML Premium (16.5%):* Lucro R$ ${p.lucro.toFixed(2)} (${p.margem.toFixed(1)}%)
 
 ` +
-                        `🔗 *Link:* ${res.link}`;
+                        `ðŸ”— *Link:* ${res.link}`;
 
           hud.style.display = 'block';
           return;
@@ -618,33 +587,33 @@
         if (res.status === 'E') resBox.classList.add('inviavel');
 
         resBox.innerHTML = 
-          '<div class="tag-header">⚡ SMART MELI | AUDITORIA</div>' +
-          '<div class="item-row">📦 <b>ATIVO:</b> ' + res.titulo + '</div>' +
-          '<div class="item-row">💵 <b>CUSTO:</b> R$ ' + custo.toFixed(2).replace('.', ',') + '</div>' +
-          '<div class="item-row" style="margin-top:8px;">🎯 <b>ALVO BUYBOX:</b> <span style="font-weight:900; font-size:14px; ' + cM + '">R$ ' + res.menor_preco.toFixed(2).replace('.', ',') + '</span></div>' +
-          '<div class="section-box"><div style="font-weight:800;font-size:10.5px;color:#00E5FF;margin-bottom:4px;">📊 CLÁSSICO (11,5%)</div>' +
+          '<div class="tag-header">âš¡ SMART MELI | AUDITORIA</div>' +
+          '<div class="item-row">ðŸ“¦ <b>ATIVO:</b> ' + res.titulo + '</div>' +
+          '<div class="item-row">ðŸ’µ <b>CUSTO:</b> R$ ' + custo.toFixed(2).replace('.', ',') + '</div>' +
+          '<div class="item-row" style="margin-top:8px;">ðŸŽ¯ <b>ALVO BUYBOX:</b> <span style="font-weight:900; font-size:14px; ' + cM + '">R$ ' + res.menor_preco.toFixed(2).replace('.', ',') + '</span></div>' +
+          '<div class="section-box"><div style="font-weight:800;font-size:10.5px;color:#00E5FF;margin-bottom:4px;">ðŸ“Š CLÃSSICO (11,5%)</div>' +
           '<div style="display:flex; justify-content:space-between;"><span>Venda: <b>R$ ' + c.preco.toFixed(2).replace('.', ',') + '</b></span>' +
           '<span>Lucro: <b style="' + cM + '">R$ ' + c.lucro.toFixed(2).replace('.', ',') + ' (' + c.margem + '%)</b></span></div></div>' +
-          '<div class="section-box premium"><div style="font-weight:800;font-size:10.5px;color:#FFE600;margin-bottom:4px;">🏆 PREMIUM (16,5%)</div>' +
+          '<div class="section-box premium"><div style="font-weight:800;font-size:10.5px;color:#FFE600;margin-bottom:4px;">ðŸ† PREMIUM (16,5%)</div>' +
           '<div style="display:flex; justify-content:space-between;"><span>Venda: <b>R$ ' + p.preco.toFixed(2).replace('.', ',') + '</b></span>' +
           '<span>Lucro: <b style="' + cM + '">R$ ' + p.lucro.toFixed(2).replace('.', ',') + ' (' + p.margem + '%)</b></span></div></div>' +
-          '<div class="item-row" style="margin-top:10px;">📈 <b>VEREDITO:</b> ' + viabTexto + '</div>';
+          '<div class="item-row" style="margin-top:10px;">ðŸ“ˆ <b>VEREDITO:</b> ' + viabTexto + '</div>';
 
         resBox.style.display = 'block';
         document.getElementById('btnCopiar').style.display = 'block';
 
       } catch (err) {
-        btn.innerText = 'Auditar Concorrência ⚡'; 
+        btn.innerText = 'Auditar ConcorrÃªncia âš¡'; 
         btn.disabled = false;
-        alert('Erro de conexão com o servidor local.');
+        alert('Erro de conexÃ£o com o servidor local.');
       }
     }
 
     function copiarWhatsApp() {
       if (!dossieWhats) return;
       navigator.clipboard.writeText(dossieWhats);
-      document.getElementById('btnCopiar').innerText = '✅ Relatório Copiado!';
-      setTimeout(() => { document.getElementById('btnCopiar').innerText = '📋 COPIAR RELATÓRIO WA'; }, 2000);
+      document.getElementById('btnCopiar').innerText = 'âœ… RelatÃ³rio Copiado!';
+      setTimeout(() => { document.getElementById('btnCopiar').innerText = 'ðŸ“‹ COPIAR RELATÃ“RIO WA'; }, 2000);
     }
 
     function novoCalculo() {
