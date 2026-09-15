@@ -4,7 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Smart Meli Ultra</title>
-  <script src="https://unpkg.com/html5-qrcode">
+  <script src="https://unpkg.com/html5-qrcode"></script>
+  <script>
     let moedaAtual = 'BRL';
     const COTACAO_USD = 5.60;
     let dadosUltimoRelatorio = null;
@@ -516,8 +517,8 @@
       const btn = document.getElementById('btnAcao');
       btn.innerText = 'Buscando Oportunidades... ⚡'; 
       btn.disabled = true;
-      document.getElementById('resBox').style.display = 'none'; 
-      document.getElementById('btnCopiar').style.display = 'none';
+      const _rb = document.getElementById('resBox'); if (_rb) _rb.style.display = 'none'; const _hud = document.getElementById('hudPainel'); if (_hud) _hud.style.display = 'none'; 
+      const _bc = document.getElementById('btnCopiar'); if (_bc) _bc.style.display = 'none';
 
       try {
         const resp = await fetch('/analisar', {
