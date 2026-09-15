@@ -1,4 +1,4 @@
-Ôªø"""
+"""
 SmartML Ultra - FastAPI Main Controller v11.2
 Interface Web + Auditoria ML + Gemini Vision Universal
 """
@@ -30,7 +30,7 @@ def abrir_aplicativo():
     caminho_html = os.path.join(os.getcwd(), "static", "index.html")
     if os.path.exists(caminho_html):
         return FileResponse(caminho_html)
-    return {"erro": "Arquivo static/index.html n√£o encontrado no servidor."}
+    return {"erro": "Arquivo static/index.html n„o encontrado no servidor."}
 
 class EntradaImagem(BaseModel):
     imagem_base64: str
@@ -43,7 +43,7 @@ def reconhecer_imagem(entrada: EntradaImagem):
     if "," in base64_data:
         base64_data = base64_data.split(",")[1]
 
-    # Pipeline de compress√£o r√°pida
+    # Pipeline de compress„o r·pida
     try:
         img_bytes = base64.b64decode(base64_data)
         img = Image.open(io.BytesIO(img_bytes))
@@ -57,10 +57,10 @@ def reconhecer_imagem(entrada: EntradaImagem):
         log.warning(f"Aviso compressao: {img_err}")
 
     prompt = (
-        "Identifique o produto comercial nesta imagem (eletr√¥nicos, perfumes, cosm√©ticos, bebidas, ferramentas ou utilidades em geral). "
-        "Retorne APENAS a marca, a linha/modelo e a especifica√ß√£o essencial (como volume, capacidade ou vers√£o) para busca direta no Mercado Livre. "
-        "Exemplos: 'Perfume Sauvage Dior EDP 100ml', 'Whisky Black Label 1L', 'Galaxy S23 256GB', 'Stanley Garrafa T√©rmica 1.4L', 'Parafusadeira Bosch GSB 18V'. "
-        "N√ÉO escreva introdu√ß√µes, N√ÉO use palavras como caixa, embalagem, original, lacrado, novo ou importado."
+        "Identifique o produto comercial nesta imagem (eletrÙnicos, perfumes, cosmÈticos, bebidas, ferramentas ou utilidades em geral). "
+        "Retorne APENAS a marca, a linha/modelo e a especificaÁ„o essencial (como volume, capacidade ou vers„o) para busca direta no Mercado Livre. "
+        "Exemplos: 'Perfume Sauvage Dior EDP 100ml', 'Whisky Black Label 1L', 'Galaxy S23 256GB', 'Stanley Garrafa TÈrmica 1.4L', 'Parafusadeira Bosch GSB 18V'. "
+        "N√O escreva introduÁıes, N√O use palavras como caixa, embalagem, original, lacrado, novo ou importado."
     )
 
     payload = {
@@ -103,7 +103,7 @@ def reconhecer_imagem(entrada: EntradaImagem):
                 if texto_limpo.lower().startswith(prefixo):
                     texto_limpo = texto_limpo[len(prefixo):].strip()
 
-            log.info(f"Termo extra√≠do pela IA: {texto_limpo}")
+            log.info(f"Termo extraÌdo pela IA: {texto_limpo}")
             return {"sucesso": True, "produto": texto_limpo}
             
     except urllib.error.HTTPError as he:
@@ -111,7 +111,7 @@ def reconhecer_imagem(entrada: EntradaImagem):
         log.error(f"Erro HTTP Gemini ({he.code}): {err_msg}")
         return {"sucesso": False, "mensagem": f"Erro Google ({he.code}): {err_msg[:120]}"}
     except Exception as e:
-        log.error(f"Falha de conex√£o com Gemini: {e}")
+        log.error(f"Falha de conex„o com Gemini: {e}")
         return {"sucesso": False, "mensagem": f"Erro: {str(e)}"}
 
 class EntradaAnalise(BaseModel):
@@ -125,10 +125,10 @@ def analisar_produto(entrada: EntradaAnalise):
         
         resultado_scraper = buscar_menor_preco_ml(entrada.titulo, entrada.custo)
         
-        if not resultado_scraper.get("encontrado"):
+        if not (resultado_scraper.get("encontrado") or resultado_scraper.get("sucesso")):
             return {
                 "sucesso": False,
-                "mensagem": resultado_scraper.get("mensagem", "‚ùå PRODUTO N√ÉO ENCONTRADO.")
+                "mensagem": resultado_scraper.get("mensagem", "? PRODUTO N√O ENCONTRADO.")
             }
 
         menor_preco = resultado_scraper["menor_preco"]
@@ -211,5 +211,5 @@ def analisar_produto(entrada: EntradaAnalise):
         return resposta_final
 
     except Exception as e:
-        log.error(f"Erro no processamento da an√°lise: {e}")
+        log.error(f"Erro no processamento da an·lise: {e}")
         raise HTTPException(status_code=500, detail=str(e))

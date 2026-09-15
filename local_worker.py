@@ -1,76 +1,144 @@
-﻿import re, uvicorn
-from fastapi import FastAPI, Query
+﻿import os
+import re
+import asyncio
+import uvicorn
+from fastapi import FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from playwright.async_api import async_playwright
 from bs4 import BeautifulSoup
-from curl_cffi import requests
 
-app = FastAPI(title="SmartML Local Worker - Imagens e Vendas")
+app = FastAPI()
 
-@app.get("/buscar")
-def buscar(termo: str = Query(...), custo: float = Query(0.0)):
-    try:
-        termo_limpo = " ".join(re.sub(r"[^\w\s]", " ", termo).split())
-        termo_slug = "-".join(termo_limpo.lower().split())
-        url = f"https://lista.mercadolivre.com.br/{termo_slug}"
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-            "Accept-Language": "pt-BR,pt;q=0.9"
-        }
+pw_instance = None
+browser = None
+browser_context = None
+page_worker = None
+lock = asyncio.Lock()
 
-        r = requests.get(url, headers=headers, timeout=15)
-        soup = BeautifulSoup(r.text, "html.parser")
-        cards = soup.select(".poly-card, .ui-search-layout__item, div.ui-search-result__wrapper")
+@app.on_event("startup")
+async def startup():
+    global pw_instance, browser, browser_context, page_worker
+    pw_instance = await async_playwright().start()
+    browser = await pw_instance.chromium.launch(
+        headless=False,
+        args=["--disable-blink-features=AutomationControlled"]
+    )
+    browser_context = await browser.new_context()
+    page_worker = await browser_context.new_page()
 
-        candidatos = []
-        piso = (custo * 0.4) if custo > 0 else 5.0
+@app.on_event("shutdown")
+async def shutdown():
+    global browser, pw_instance
+    if browser:
+        await browser.close()
+    if pw_instance:
+        await pw_instance.stop()
 
-        for card in cards:
-            tag_tit = card.select_one(".poly-component__title, a.ui-search-link, .ui-search-item__title, h2")
-            if not tag_tit:
-                continue
-            tit = tag_tit.get_text(strip=True)
+@app.get("/")
+@app.get("/health")
+def health():
+    return {"status": "online", "worker": "SmartML Local Worker"}
 
-            # Filtro de avaliacao / vendas comprovadas
-            tag_rev = card.select_one(".poly-reviews__total, .ui-search-reviews__amount, span.andes-visually-hidden")
-            tag_stars = card.select_one(".poly-reviews, .ui-search-reviews")
-            if not tag_rev and not tag_stars:
-                continue
+async def executar_busca(termo: str, custo: float = 0.0):
+    global page_worker, lock
+    async with lock:
+        try:
+            termo_limpo = re.sub(r"[^\w\s-]", "", termo).strip().lower()
+            termo_formatado = re.sub(r"\s+", "-", termo_limpo)
+            url = f"https://lista.mercadolivre.com.br/{termo_formatado}"
 
-            tag_lnk = card.select_one("a[href*='mercadolivre.com.br']") or tag_tit
-            lnk = tag_lnk.get("href", "") if tag_lnk.name == "a" else (card.find("a", href=True)["href"] if card.find("a", href=True) else "")
-
-            tag_f = card.select_one(".andes-money-amount__fraction")
-            if not tag_f:
-                continue
+            print(f"\n[ROBO] 🔍 Buscando: '{termo}' (Custo base: R$ {custo:.2f})")
+            print(f"[ROBO] 🌐 Acessando URL: {url}")
 
             try:
-                p = float(re.sub(r"[^\d]", "", tag_f.get_text(strip=True)))
-                tag_c = card.select_one(".andes-money-amount__cents")
-                if tag_c:
-                    p += float(re.sub(r"[^\d]", "", tag_c.get_text(strip=True))) / 100.0
+                await page_worker.goto(url, wait_until="domcontentloaded", timeout=35000)
+            except Exception as ge:
+                print(f"[ROBO] ⚠️ Aviso de carregamento: {ge}")
+
+            await page_worker.wait_for_timeout(2500)
+            try:
+                await page_worker.evaluate("window.scrollBy(0, 500)")
             except Exception:
-                continue
+                pass
+            await page_worker.wait_for_timeout(1000)
 
-            # Captura da foto em alta definicao do anuncio
-            img_tag = card.select_one("img.poly-component__picture, img.ui-search-result-image__element, img")
-            foto = ""
-            if img_tag:
-                foto = img_tag.get("data-src") or img_tag.get("src") or ""
-                if foto.startswith("data:image"):
-                    foto = img_tag.get("data-src", "")
+            html = await page_worker.content()
+            soup = BeautifulSoup(html, "html.parser")
+            
+            cards = soup.select(".poly-card, .ui-search-layout__item, div.ui-search-result__wrapper, .ui-search-result")
+            print(f"[ROBO] 📦 Cards detectados na pagina: {len(cards)}")
 
-            if p >= piso:
-                candidatos.append({"titulo": tit, "preco": p, "link": lnk, "imagem": foto})
+            candidatos = []
+            piso = (custo * 0.35) if custo > 0 else 5.0
 
-            if len(candidatos) >= 30:
-                break
+            for card in cards:
+                tag_tit = card.select_one(".poly-component__title, a.ui-search-link, .ui-search-item__title, h2, a.poly-card__title")
+                if not tag_tit:
+                    continue
+                tit = tag_tit.get_text(strip=True)
+                if not tit or len(tit) < 3:
+                    continue
 
-        candidatos.sort(key=lambda x: x["preco"])
-        return {"sucesso": True, "candidatos": candidatos[:20]}
+                tag_lnk = card.select_one("a[href*='mercadolivre.com.br'], a.ui-search-link, a.poly-component__title") or tag_tit
+                lnk = tag_lnk.get("href", "") if tag_lnk.name == "a" else (card.find("a", href=True)["href"] if card.find("a", href=True) else "")
 
-    except Exception as e:
-        return {"sucesso": False, "candidatos": [], "mensagem": str(e)}
+                tag_f = card.select_one(".andes-money-amount__fraction")
+                if not tag_f:
+                    continue
+                try:
+                    p = float(re.sub(r"[^\d]", "", tag_f.get_text(strip=True)))
+                    tag_c = card.select_one(".andes-money-amount__cents")
+                    if tag_c:
+                        cents = re.sub(r"[^\d]", "", tag_c.get_text(strip=True))
+                        if cents:
+                            p += float(cents) / (10 ** len(cents))
+                except Exception:
+                    continue
+
+                img_tag = card.select_one("img")
+                foto = (img_tag.get("data-src") or img_tag.get("src") or "") if img_tag else ""
+
+                if p >= piso:
+                    candidatos.append({"titulo": tit, "preco": p, "link": lnk, "imagem": foto})
+
+            vistos = set()
+            unicos = []
+            for c in candidatos:
+                chave = c["link"] if c["link"] else c["titulo"]
+                if chave not in vistos:
+                    vistos.add(chave)
+                    unicos.append(c)
+
+            unicos.sort(key=lambda x: x["preco"])
+            print(f"[ROBO] ✅ Candidatos validos acima do piso (R$ {piso:.2f}): {len(unicos)}")
+            if unicos:
+                print(f"[ROBO] 🎯 Menor preco encontrado: R$ {unicos[0]['preco']:.2f} - {unicos[0]['titulo'][:40]}...")
+
+            return {"sucesso": True, "candidatos": unicos[:20]}
+        except Exception as e:
+            print(f"[ROBO] ❌ Erro na busca: {e}")
+            return {"sucesso": False, "candidatos": [], "mensagem": str(e)}
+
+@app.get("/buscar")
+@app.get("/scrape")
+async def buscar_get(termo: str = "fone", custo: float = 0.0):
+    return await executar_busca(termo, custo)
+
+@app.post("/buscar")
+@app.post("/scrape")
+async def buscar_post(req: Request):
+    dados = await req.json()
+    termo = dados.get("termo") or dados.get("query") or "fone"
+    custo = float(dados.get("custo") or 0.0)
+    return await executar_busca(termo, custo)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8005)
