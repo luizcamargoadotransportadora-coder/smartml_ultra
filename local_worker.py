@@ -1,4 +1,40 @@
-﻿import os
+def eh_identico(termo, tit):
+    t = set(re.sub(r'[^a-z0-9 ]', '', termo.lower()).split()) - {'de','do','da','para','com','em','e','o','a'}
+    tit_l = tit.lower()
+    if any(ac in tit_l for ac in ['capa','case','pelicula','cabo','carregador','adaptador'] if ac not in termo.lower()): return False
+    return all(p in tit_l for p in t)
+
+def eh_produto_identico(termo_busca: str, titulo_anuncio: str) -> bool:
+    import unicodedata
+    def normalizar(txt: str) -> str:
+        txt = unicodedata.normalize('NFKD', txt).encode('ASCII', 'ignore').decode('utf-8')
+        return re.sub(r'[^a-z0-9\s]', ' ', txt.lower())
+
+    t_norm = normalizar(termo_busca)
+    a_norm = normalizar(titulo_anuncio)
+
+    # 1. Elimina acessorios se a busca for pelo produto principal
+    acessorios = ["capa", "case", "pelicula", "peliculas", "cabo", "carregador", "adaptador", "suporte", "almofada", "borracha", "borrachinha", "cordao"]
+    for ac in acessorios:
+        if ac not in t_norm and re.search(r'' + re.escape(ac) + r'', a_norm):
+            return False
+
+    # 2. Remove stopwords comuns
+    stopwords = {"de", "do", "da", "dos", "das", "para", "com", "em", "e", "ou", "o", "a", "os", "as", "um", "uma"}
+    tokens_busca = [t for t in t_norm.split() if t and t not in stopwords]
+
+    if not tokens_busca:
+        return True
+
+    # 3. Exige que todas as palavras-chave da busca estejam no titulo do concorrente
+    tokens_anuncio = set(a_norm.split())
+    for token in tokens_busca:
+        if not any(token in tan for tan in tokens_anuncio):
+            return False
+
+    return True
+
+import os
 import re
 import asyncio
 import uvicorn
@@ -70,7 +106,15 @@ async def executar_busca(termo: str, custo: float = 0.0):
                 pass
             await page_worker.wait_for_timeout(1000)
 
-            html = await page_worker.content()
+            html = ""
+            for _ in range(5):
+                try:
+                    await page_worker.wait_for_load_state("domcontentloaded", timeout=4000)
+                    html = await page_worker.content()
+                    if html:
+                        break
+                except Exception:
+                    await page_worker.wait_for_timeout(1000)
             soup = BeautifulSoup(html, "html.parser")
             
             cards = soup.select(".poly-card, .ui-search-layout__item, div.ui-search-result__wrapper, .ui-search-result")
@@ -84,6 +128,10 @@ async def executar_busca(termo: str, custo: float = 0.0):
                 if not tag_tit:
                     continue
                 tit = tag_tit.get_text(strip=True)
+                # Ignora produtos usados
+                if any(u in card.get_text(" ", strip=True).lower() for u in ["usado", "usada", "recondicionado", "seminovo", "semi novo"]):
+                    continue
+
                 if not tit or len(tit) < 3:
                     continue
 
@@ -106,7 +154,7 @@ async def executar_busca(termo: str, custo: float = 0.0):
                 img_tag = card.select_one("img")
                 foto = (img_tag.get("data-src") or img_tag.get("src") or "") if img_tag else ""
 
-                if p >= piso:
+                if p >= piso and eh_produto_identico(termo, tit):
                     candidatos.append({"titulo": tit, "preco": p, "link": lnk, "imagem": foto})
 
             vistos = set()
