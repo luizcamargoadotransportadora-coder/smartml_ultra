@@ -94,7 +94,10 @@
     }
 
     function enviarWhatsAppDireto() {
-      if (!dadosUltimoRelatorio) return alert('Realize uma auditoria primeiro.');
+      if (!dadosUltimoRelatorio) {
+        alert('Realize uma auditoria primeiro.');
+        return;
+      }
       const r = dadosUltimoRelatorio;
       const cot = (typeof getCotacaoEfetiva === 'function') ? getCotacaoEfetiva() : 5.1529;
       const custoNum = (typeof getCustoNumerico === 'function') ? getCustoNumerico() : (r.custo || 0);
@@ -103,7 +106,7 @@
       const precoAlvo = Number(r.menor_preco || 0);
       const freteVendedor = precoAlvo >= 79.0 ? 9.55 : 0.0;
 
-      // ML Classico (11.5%)
+      // Demonstrativo ML Classico (11.5%)
       const comissaoC = Number((precoAlvo * 0.115).toFixed(2));
       const impostoC = Number((precoAlvo * 0.060).toFixed(2));
       const avariasC = Number((precoAlvo * 0.015).toFixed(2));
@@ -112,7 +115,7 @@
       const margemC = precoAlvo > 0 ? ((lucroC / precoAlvo) * 100).toFixed(1).replace('.', ',') : '0,0';
       const precoSugC = Number(((custoCompra + freteVendedor) / 0.75).toFixed(2));
 
-      // ML Premium (16.5% - 12x Sem Juros)
+      // Demonstrativo ML Premium (16.5% - 12x Sem Juros)
       const comissaoP = Number((precoAlvo * 0.165).toFixed(2));
       const impostoP = Number((precoAlvo * 0.060).toFixed(2));
       const avariasP = Number((precoAlvo * 0.015).toFixed(2));
@@ -750,30 +753,34 @@
           }
 
           hud.className = 'hud-panel status-' + res.status;
-          stBadge.innerText = res.status === 'A' ? '🟢 OPORTUNIDADE' : (res.status === 'E' ? '🔴 PREJUÍZO' : '🟡 MARGEM CRÍTICA');
-          stBadge.style.background = res.status === 'A' ? 'rgba(0,255,136,0.15)' : (res.status === 'E' ? 'rgba(239,68,68,0.15)' : 'rgba(255,230,0,0.15)');
-          stBadge.style.color = res.status === 'A' ? '#00FF88' : (res.status === 'E' ? '#ef4444' : '#FFE600');
+          const pVal = Number(res.menor_preco || 0);
+          const cLucro = Number(c.lucro || 0);
+          const pLucro = Number(p.lucro || 0);
+          const cMarg = Number(c.margem || 0);
+          const pMarg = Number(p.margem || 0);
+          const piso = pVal > 3000 ? 3.0 : (pVal >= 500 ? 6.0 : 12.0);
+          const alvo = pVal > 3000 ? 6.0 : (pVal >= 500 ? 9.0 : 15.0);
 
-          document.getElementById('hudTitulo').innerText = res.titulo_encontrado || res.titulo;
-          document.getElementById('hudPreco').innerText = 'R$ ' + res.menor_preco.toFixed(2);
-          document.getElementById('hudImg').src = res.imagem || 'https://http2.mlstatic.com/frontend-assets/ui-navigation/5.18.9/mercadolibre/logo__small.png';
+          if (cLucro <= 0 && pLucro <= 0) {
+            stBadge.innerText = 'PREJUÍZO';
+            stBadge.style.color = '#ef4444';
+            stBadge.style.background = 'rgba(239,68,68,0.15)';
+          } else if (cMarg < piso && pMarg < piso) {
+            stBadge.innerText = 'ABAIXO DA MÉDIA';
+            stBadge.style.color = '#f97316';
+            stBadge.style.background = 'rgba(249,115,22,0.15)';
+          } else if (cMarg >= alvo || pMarg >= alvo || cLucro >= 150) {
+            stBadge.innerText = 'OPORTUNIDADE';
+            stBadge.style.color = '#00FF88';
+            stBadge.style.background = 'rgba(0,255,136,0.15)';
+          } else {
+            stBadge.innerText = 'MARGEM DE MERCADO';
+            stBadge.style.color = '#FFE600';
+            stBadge.style.background = 'rgba(255,230,0,0.15)';
+          }
 
-          const lk = document.getElementById('hudLink');
-          if (res.link) { lk.href = res.link; lk.style.display = 'inline-block'; } else { lk.style.display = 'none'; }
-
-          // Classico
-          const c = res.classico;
-          document.getElementById('hudLucroC').innerText = 'R$ ' + c.lucro.toFixed(2);
-          document.getElementById('hudLucroC').style.color = c.lucro >= 0 ? '#00FF88' : '#ef4444';
-          document.getElementById('hudMargemC').innerText = 'Margem: ' + c.margem.toFixed(1) + '%';
-          document.getElementById('hudMargemC').style.color = c.margem >= 15 ? '#00FF88' : (c.margem > 0 ? '#FFE600' : '#ef4444');
-
-          // Premium
-          const p = res.premium;
-          document.getElementById('hudLucroP').innerText = 'R$ ' + p.lucro.toFixed(2);
-          document.getElementById('hudLucroP').style.color = p.lucro >= 0 ? '#FFE600' : '#ef4444';
-          document.getElementById('hudMargemP').innerText = 'Margem: ' + p.margem.toFixed(1) + '%';
-          document.getElementById('hudMargemP').style.color = p.margem >= 15 ? '#00FF88' : (p.margem > 0 ? '#FFE600' : '#ef4444');
+          document.getElementById('hudMargemC').style.color = (cMarg >= alvo || cLucro >= 150) ? '#00FF88' : (cMarg > 0 ? '#FFE600' : '#ef4444');
+          document.getElementById('hudMargemP').style.color = (pMarg >= alvo || pLucro >= 150) ? '#00FF88' : (pMarg > 0 ? '#FFE600' : '#ef4444');
 
           dossieWhats = `*🤖 SMART MELI ULTRA | AUDITORIA*
 
