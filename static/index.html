@@ -100,122 +100,108 @@
       const p = r.premium || {};
       const cot = (typeof getCotacaoEfetiva === 'function') ? getCotacaoEfetiva() : 5.60;
       const custoNum = (typeof getCustoNumerico === 'function') ? getCustoNumerico() : (r.custo || 0);
-      const custoCompra = moedaAtual === 'USD' ? (custoNum * cot) : custoNum;
+      const custoFinalBRL = moedaAtual === 'USD' ? (custoNum * cot) : custoNum;
 
-      const precoVenda = Number(r.menor_preco || 0);
-      const precoMedio = Number(r.preco_medio || (precoVenda * 1.04));
-      const precoIdeal = Number((precoVenda * 0.995).toFixed(2));
+      const preco = Number(r.menor_preco || 0);
+      const taxaC = preco * 0.115;
+      const taxaP = preco * 0.165;
+      const lucroC = Number(c.lucro || 0);
+      const lucroP = Number(p.lucro || 0);
+      const margemC = Number(c.margem || 0);
+      const margemP = Number(p.margem || 0);
 
-      // 1. Custos Operacionais e Tributários
-      const comissaoPct = 11.5;
-      const comissaoRS = precoVenda * (comissaoPct / 100);
-      const taxaFixa = precoVenda < 79 ? 6.00 : 0.00;
-      const freteML = precoVenda >= 79 ? 38.90 : 0.00;
-      const impostoPct = 6.0;
-      const impostoRS = precoVenda * (impostoPct / 100);
-      const emissaoNF = 0.50;
-      const embalagem = 5.00;
-      const avarias = precoVenda * 0.015;
+      const outrosC = Math.max(0, preco - custoFinalBRL - taxaC - lucroC);
+      const outrosP = Math.max(0, preco - custoFinalBRL - taxaP - lucroP);
 
-      const custoTotal = custoCompra + comissaoRS + taxaFixa + freteML + impostoRS + emissaoNF + embalagem + avarias;
-      const lucroLiquido = precoVenda - custoTotal;
-      const margemReal = precoVenda > 0 ? (lucroLiquido / precoVenda) * 100 : 0;
-      const margemMenor = margemReal;
-
-      // 2. Giro e Métricas Competitivas
-      const vendasQtd = r.vendas || r.quantidade_vendida || '+1.000 vendidos';
-      const concComVendas = r.concorrentes_ativos || '8';
-      const confianca = '98%';
-
-      // 3. Veredito de Viabilidade
-      let statusViabilidade = '🟢 VIABILIDADE DE COMPRA: APROVADA (ALTO GIRO)';
-      let textoTese = 'Super High Ticket com margem líquida acima do teto de mercado (padrão nicho: 5% a 8%). Risco de estoque praticamente nulo devido ao volume da categoria.';
-
-      if (lucroLiquido <= 0) {
-        statusViabilidade = '🔴 VIABILIDADE: REPROVADA (PREJUÍZO REAL)';
-        textoTese = 'Operação deficitária. Custos operacionais e de aquisição superam a receita de venda.';
-      } else if (margemReal < 4.0 && precoVenda > 3000) {
-        statusViabilidade = '🟠 VIABILIDADE: REPROVADA (ABAIXO DA MÉDIA)';
-        textoTese = 'Margem líquida insuficiente para absorver contingências operacionais e custo de capital de giro.';
+      // Tratamento e classificacao de Giro de Vendas
+      const vendasTexto = r.vendas || r.quantidade_vendida || '+1.000 vendidos';
+      let tagGiro = '📦 Giro Moderado';
+      if (/mil|5000|10000/i.test(vendasTexto)) {
+        tagGiro = '🔥 Ultra Giro';
+      } else if (/100|250|500/i.test(vendasTexto)) {
+        tagGiro = '⚡ Alto Giro';
+      } else if (/novo|0 vendido/i.test(vendasTexto)) {
+        tagGiro = '🐢 Anúncio Recente';
       }
 
-      let linhaCustoCompra = '';
-      if (moedaAtual === 'USD') {
-        linhaCustoCompra = `• Custo de Compra: US$ ${custoNum.toFixed(2)} (Câmbio: R$ ${cot.toFixed(2)}) ➔ *R$ ${custoCompra.toFixed(2)}*`;
+      let statusRadar = '';
+      let pisoMinimo = preco > 3000 ? 4.0 : (preco >= 500 ? 7.0 : 13.0);
+      let margemAlvo = preco > 3000 ? 6.0 : (preco >= 500 ? 11.0 : 18.0);
+
+      if (lucroC <= 0 && lucroP <= 0) {
+        statusRadar = '🔴 PREJUÍZO REAL (Operação no Vermelho)';
+      } else if (margemC < pisoMinimo) {
+        statusRadar = '🟠 ABAIXO DA MÉDIA DE MERCADO (Inviável Operacionalmente)';
+      } else if (margemC >= margemAlvo || tagGiro.includes('Ultra')) {
+        statusRadar = `🟢 OPORTUNIDADE DE ${tagGiro.toUpperCase().replace(/[^A-Z ]/g, '')}
+(Super High Ticket com ${vendasTexto}: margem com liquidez imediata)`;
       } else {
-        linhaCustoCompra = `• Custo de Compra: *R$ ${custoCompra.toFixed(2)}*`;
+        statusRadar = '🟡 MARGEM DE MERCADO (Viável Operacionalmente)';
       }
 
-      const msg = `*🤖 SMART MELI ULTRA | DOSSIÊ EXECUTIVO DE VIABILIDADE*
+      let cabecalhoCusto = '';
+      if (moedaAtual === 'USD') {
+        cabecalhoCusto = `💵 *Custo Base:* US$ ${custoNum.toFixed(2)} (Câmbio R$ ${cot.toFixed(2)}) ➔ *R$ ${custoFinalBRL.toFixed(2)}*`;
+      } else {
+        cabecalhoCusto = `💵 *Custo Base:* R$ ${custoFinalBRL.toFixed(2)}`;
+      }
+
+      const msg = `*🤖 SMART MELI ULTRA | ANÁLISE DE VIABILIDADE*
 
 ` +
                   `📦 *Ativo:* ${r.titulo_encontrado || r.titulo || 'Produto'}
 ` +
-                  `🎯 *Menor Preço Mercado:* R$ ${precoVenda.toFixed(2)}
+                  `🎯 *Preço Alvo ML:* R$ ${preco.toFixed(2)}
 ` +
-                  `📈 *Média Mercado:* R$ ${precoMedio.toFixed(2)}
+                  `🔥 *Giro de Vendas:* ${tagGiro} (${vendasTexto})
 ` +
-                  `🔥 *Giro / Vendas:* ${vendasQtd} | ${concComVendas} conc. ativos
-` +
-                  `🎯 *Confiança Análise:* ${confianca}
+                  `${cabecalhoCusto}
 
 ` +
                   `━━━━━━━━━━━━━━━━━━━━━━
 ` +
-                  `💵 *1. CUSTO DE AQUISIÇÃO (CMV)*
+                  `⚡ *MERCADO LIVRE CLÁSSICO (11.5%)*
 ` +
-                  `${linhaCustoCompra}
+                  `• Preço Venda: R$ ${preco.toFixed(2)}
+` +
+                  `• (-) Custo Mercadoria: R$ ${custoFinalBRL.toFixed(2)}
+` +
+                  `• (-) Tarifa ML (11.5%): R$ ${taxaC.toFixed(2)}
+` +
+                  (outrosC > 0 ? `• (-) Frete / Custos Operacionais: R$ ${outrosC.toFixed(2)}
+` : '') +
+                  `• (=) *Lucro Líquido: R$ ${lucroC.toFixed(2)}*
+` +
+                  `• 📊 *Margem Líquida: ${margemC.toFixed(1)}%*
 
 ` +
                   `━━━━━━━━━━━━━━━━━━━━━━
 ` +
-                  `🧾 *2. DEDUÇÕES OPERACIONAIS & TRIBUTÁRIAS*
+                  `💎 *MERCADO LIVRE PREMIUM (16.5% - 12x Sem Juros)*
 ` +
-                  `• Comissão ML (${comissaoPct}%): R$ ${comissaoRS.toFixed(2)}
+                  `• Preço Venda: R$ ${preco.toFixed(2)}
 ` +
-                  `• Taxa Fixa: R$ ${taxaFixa.toFixed(2)}
+                  `• (-) Custo Mercadoria: R$ ${custoFinalBRL.toFixed(2)}
 ` +
-                  `• Frete ML: R$ ${freteML.toFixed(2)}
+                  `• (-) Tarifa ML (16.5%): R$ ${taxaP.toFixed(2)}
 ` +
-                  `• Imposto Venda (${impostoPct}%): R$ ${impostoRS.toFixed(2)}
+                  (outrosP > 0 ? `• (-) Frete / Custos Operacionais: R$ ${outrosP.toFixed(2)}
+` : '') +
+                  `• (=) *Lucro Líquido: R$ ${lucroP.toFixed(2)}*
 ` +
-                  `• Emissão NF: R$ ${emissaoNF.toFixed(2)}
-` +
-                  `• Embalagem: R$ ${embalagem.toFixed(2)}
-` +
-                  `• Provisão Avarias (1.5%): R$ ${avarias.toFixed(2)}
-` +
-                  `• 🛑 *CUSTO TOTAL ABSORVIDO:* *R$ ${custoTotal.toFixed(2)}*
+                  `• 📊 *Margem Líquida: ${margemP.toFixed(1)}%*
 
 ` +
                   `━━━━━━━━━━━━━━━━━━━━━━
 ` +
-                  `📊 *3. RESULTADO & VIABILIDADE DE VENDA*
-` +
-                  `• Preço Venda Sugerido: *R$ ${precoVenda.toFixed(2)}*
-` +
-                  `• Preço Ideal de Combate: *R$ ${precoIdeal.toFixed(2)}*
-` +
-                  `• 💵 *LUCRO LÍQUIDO: R$ ${lucroLiquido.toFixed(2)}*
-` +
-                  `• 📈 *MARGEM REAL SUGERIDA: ${margemReal.toFixed(1)}%*
-` +
-                  `• Margem do Menor Preço: ${margemMenor.toFixed(1)}%
+                  `🚦 *Veredito Radar:*
+${statusRadar}
 
 ` +
-                  `━━━━━━━━━━━━━━━━━━━━━━
-` +
-                  `🚦 *4. PARECER AUDITORIA IA*
-` +
-                  `${statusViabilidade}
-` +
-                  `_${textoTese}_
+                  `🔗 *Link do Concorrente:* ${r.link || 'N/A'}
 
 ` +
-                  `🔗 *Link Concorrente / Líder:* ${r.link || 'N/A'}
-
-` +
-                  `_Smart Meli Ultra Core • Inteligência em Arbitragem_`;
+                  `_Auditado via Smart Meli Ultra Core_`;
 
       const url = 'https://api.whatsapp.com/send?text=' + encodeURIComponent(msg);
       window.open(url, '_blank');
