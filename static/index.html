@@ -106,7 +106,6 @@
       const precoAlvo = Number(r.menor_preco || 0);
       const freteVendedor = precoAlvo >= 79.0 ? 9.55 : 0.0;
 
-      // Demonstrativo ML Clássico (11.5%)
       const comissaoC = Number((precoAlvo * 0.115).toFixed(2));
       const impostoC = Number((precoAlvo * 0.060).toFixed(2));
       const avariasC = Number((precoAlvo * 0.015).toFixed(2));
@@ -115,7 +114,6 @@
       const margemC = precoAlvo > 0 ? ((lucroC / precoAlvo) * 100).toFixed(1).replace('.', ',') : '0,0';
       const precoSugC = Number(((custoCompra + freteVendedor) / 0.75).toFixed(2));
 
-      // Demonstrativo ML Premium (16.5% - 12x Sem Juros)
       const comissaoP = Number((precoAlvo * 0.165).toFixed(2));
       const impostoP = Number((precoAlvo * 0.060).toFixed(2));
       const avariasP = Number((precoAlvo * 0.015).toFixed(2));
@@ -129,31 +127,22 @@
       const horaStr = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
       const vendasQtd = r.vendas || r.quantidade_vendida || '+1.000 un';
 
-      let linhaCusto = '';
-      if (moedaAtual === 'USD') {
-        linhaCusto = 'Custo de Aquisicao (CMV): US$ ' + custoNum.toFixed(2) + ' (Cambio R$ ' + cot.toFixed(4) + ') -> R$ ' + custoCompra.toFixed(2);
-      } else {
-        linhaCusto = 'Custo de Aquisicao (CMV): R$ ' + custoCompra.toFixed(2);
-      }
+      let linhaCusto = moedaAtual === 'USD' ? 
+        'Custo de Aquisicao (CMV): US$ ' + custoNum.toFixed(2) + ' (Cambio R$ ' + cot.toFixed(4) + ') -> R$ ' + custoCompra.toFixed(2) :
+        'Custo de Aquisicao (CMV): R$ ' + custoCompra.toFixed(2);
 
       let parecerTexto = 'Veredito: OPORTUNIDADE DE ALTA PERFORMANCE
 ' +
                          'Estrategia: ANUNCIO DUPLO (RECOMENDADO)
 ' +
-                         'Fundamentacao: Margens liquidas de ' + margemP + '% a ' + margemC + '% superam a media historica do nicho (padrao 5% a 8%). Risco de estoque nulo. Recomenda-se publicar anuncio Premium a R$ ' + precoAlvo.toFixed(2) + ' para tracionar o parcelamento sem juros e anuncio Classico com desconto a vista para dominar o BuyBox com margem superior.';
+                         'Fundamentacao: Margens liquidas de ' + margemP + '% a ' + margemC + '% superam a media historica do nicho. Risco de estoque nulo.';
 
       if (lucroC <= 0 && lucroP <= 0) {
         parecerTexto = 'Veredito: REPROVADO (PREJUIZO OPERACIONAL)
-' +
-                       'Estrategia: NAO ADQUIRIR
-' +
-                       'Fundamentacao: Custos de aquisicao e tarifas superam a receita de venda nos precos atuais de mercado.';
+Estrategia: NAO ADQUIRIR';
       } else if (lucroP <= 0) {
         parecerTexto = 'Veredito: RESTRITO AO CANAL CLASSICO
-' +
-                       'Estrategia: EXCLUSIVO A VISTA
-' +
-                       'Fundamentacao: O parcelamento 12x sem juros corroi a rentabilidade. Operar unicamente no ML Classico a vista.';
+Estrategia: EXCLUSIVO A VISTA';
       }
 
       const msg = 'SMART MELI ULTRA | ANÁLISE DE VIABILIDADE
@@ -169,11 +158,11 @@
 ' +
                   'Menor Preco Mercado Livre: R$ ' + precoAlvo.toFixed(2) + '
 ' +
-                  'Liquidez / Volume: Alto Giro (' + vendasQtd + '/mes | 8 concorrentes)
+                  'Liquidez / Volume: Alto Giro (' + vendasQtd + '/mes)
 ' +
                   linhaCusto + '
 ' +
-                  'Frete Mercado Envios: R$ ' + freteVendedor.toFixed(2) + ' (0,58 kg faturado | Subsidio 50%)
+                  'Frete Mercado Envios: R$ ' + freteVendedor.toFixed(2) + '
 
 ' +
                   '========================================
@@ -203,8 +192,6 @@
                   '(=) MARGEM LIQUIDA REAL:           ' + margemC + '%
 ' +
                   'Preco Minimo Sugerido (Meta 6%):   R$ ' + precoSugC.toFixed(2) + '
-' +
-                  'Veredito Canal:                    ' + (lucroC > 0 ? 'OPORTUNIDADE (ALTA MARGEM)' : 'PREJUIZO') + '
 
 ' +
                   '========================================
@@ -234,8 +221,6 @@
                   '(=) MARGEM LIQUIDA REAL:           ' + margemP + '%
 ' +
                   'Preco Minimo Sugerido (Meta 6%):   R$ ' + precoSugP.toFixed(2) + '
-' +
-                  'Veredito Canal:                    ' + (lucroP > 0 ? 'OPORTUNIDADE (ALTO GIRO)' : 'PREJUIZO') + '
 
 ' +
                   '========================================
@@ -769,14 +754,14 @@
           document.getElementById('hudLucroC').innerText = 'R$ ' + c.lucro.toFixed(2);
           document.getElementById('hudLucroC').style.color = c.lucro >= 0 ? '#00FF88' : '#ef4444';
           document.getElementById('hudMargemC').innerText = 'Margem: ' + c.margem.toFixed(1) + '%';
-          document.getElementById('hudMargemC').style.color = c.margem >= 6.0 ? '#00FF88' : (c.margem > 0 ? '#FFE600' : '#ef4444');
+          document.getElementById('hudMargemC').style.color = c.margem >= 15 ? '#00FF88' : (c.margem > 0 ? '#FFE600' : '#ef4444');
 
           // Premium
           const p = res.premium;
           document.getElementById('hudLucroP').innerText = 'R$ ' + p.lucro.toFixed(2);
           document.getElementById('hudLucroP').style.color = p.lucro >= 0 ? '#FFE600' : '#ef4444';
           document.getElementById('hudMargemP').innerText = 'Margem: ' + p.margem.toFixed(1) + '%';
-          document.getElementById('hudMargemP').style.color = p.margem >= 6.0 ? '#00FF88' : (p.margem > 0 ? '#FFE600' : '#ef4444');
+          document.getElementById('hudMargemP').style.color = p.margem >= 15 ? '#00FF88' : (p.margem > 0 ? '#FFE600' : '#ef4444');
 
           dossieWhats = `*🤖 SMART MELI ULTRA | AUDITORIA*
 
