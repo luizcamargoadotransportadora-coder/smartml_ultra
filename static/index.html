@@ -24,7 +24,16 @@
     }
 
     let moedaAtual = 'BRL';
-    const COTACAO_USD = 5.60;
+    let cotacaoDolar = 5.1529;
+    fetch('https://economia.awesomeapi.com.br/last/USD-BRL')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.USDBRL) {
+          cotacaoDolar = parseFloat(data.USDBRL.bid);
+          if (typeof atualizarConversao === 'function') atualizarConversao();
+        }
+      }).catch(() => {});
+
     let dadosUltimoRelatorio = null;
 
     function setMoeda(m) {
@@ -40,8 +49,8 @@
       const val = getCustoNumerico();
       const prev = document.getElementById('previewConversao');
       if (moedaAtual === 'USD' && !isNaN(val) && val > 0) {
-        const brl = (val * COTACAO_USD).toFixed(2);
-        prev.innerText = '≈ R$ ' + brl + ' (Câmbio: US$ 1 = R$ ' + COTACAO_USD.toFixed(2) + ')';
+        const brl = (val * cotacaoDolar).toFixed(2);
+        prev.innerText = '≈ R$ ' + brl + ' (Câmbio: US$ 1 = R$ ' + cotacaoDolar.toFixed(2) + ')';
         prev.style.display = 'block';
       } else {
         prev.style.display = 'none';
@@ -528,7 +537,8 @@
     // 2. AUDITORIA CONTÁBIL
     async function executarCalculo() {
       const prod = document.getElementById('inProd').value.trim();
-      const custo = getCustoNumerico();
+      const custoRaw = getCustoNumerico();
+      const custo = (typeof moedaAtual !== 'undefined' && moedaAtual === 'USD') ? Number((custoRaw * cotacaoDolar).toFixed(2)) : custoRaw;
       if (!prod || isNaN(custo) || custo <= 0) return alert('Insira o produto e o custo base.');
 
       const btn = document.getElementById('btnAcao');
@@ -541,7 +551,7 @@
         const resp = await fetch('/analisar', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ titulo: prod, custo: custo, moeda: moedaAtual, cotacao: COTACAO_USD })
+          body: JSON.stringify({ titulo: prod, custo: custo, moeda: moedaAtual, cotacao: cotacaoDolar })
         });
 
         const res = await resp.json();
@@ -584,14 +594,14 @@
           document.getElementById('hudLucroC').innerText = 'R$ ' + c.lucro.toFixed(2);
           document.getElementById('hudLucroC').style.color = c.lucro >= 0 ? '#00FF88' : '#ef4444';
           document.getElementById('hudMargemC').innerText = 'Margem: ' + c.margem.toFixed(1) + '%';
-          document.getElementById('hudMargemC').style.color = c.margem >= 15 ? '#00FF88' : (c.margem > 0 ? '#FFE600' : '#ef4444');
+          document.getElementById('hudMargemC').style.color = (c.margem >= 6.0 || c.lucro >= 150) ? '#00FF88' : (c.margem > 0 ? '#FFE600' : '#ef4444');
 
           // Premium
           const p = res.premium;
           document.getElementById('hudLucroP').innerText = 'R$ ' + p.lucro.toFixed(2);
           document.getElementById('hudLucroP').style.color = p.lucro >= 0 ? '#FFE600' : '#ef4444';
           document.getElementById('hudMargemP').innerText = 'Margem: ' + p.margem.toFixed(1) + '%';
-          document.getElementById('hudMargemP').style.color = p.margem >= 15 ? '#00FF88' : (p.margem > 0 ? '#FFE600' : '#ef4444');
+          document.getElementById('hudMargemP').style.color = (p.margem >= 6.0 || p.lucro >= 150) ? '#00FF88' : (p.margem > 0 ? '#FFE600' : '#ef4444');
 
           dossieWhats = `*🤖 SMART MELI ULTRA | AUDITORIA*
 
