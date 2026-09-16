@@ -2,10 +2,164 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Smart Meli Ultra</title>
-  <script src="https://unpkg.com/html5-qrcode"></script>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Smart Meli Ultra - Auditoria HUD</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-base: #0B0E14;
+      --card-bg: #151922;
+      --card-border: #232936;
+      --text-main: #F1F5F9;
+      --text-muted: #94A3B8;
+      --accent-yellow: #FFE600;
+      --accent-green: #00FF88;
+      --accent-red: #ef4444;
+      --accent-orange: #f97316;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Inter', sans-serif; }
+    body { background-color: var(--bg-base); color: var(--text-main); display: flex; justify-content: center; padding: 24px 16px; }
+    .container { width: 100%; max-width: 480px; display: flex; flex-direction: column; gap: 16px; }
+    .card-box { background: var(--card-bg); border: 1px solid var(--card-border); border-radius: 14px; padding: 20px; display: flex; flex-direction: column; gap: 14px; }
+    .lbl { font-size: 11px; font-weight: 800; color: var(--accent-yellow); letter-spacing: 0.8px; text-transform: uppercase; }
+    .input-row { display: flex; gap: 8px; align-items: center; }
+    input[type="text"], input[type="number"] {
+      width: 100%; background: #0f131a; border: 1px solid #2d3748; color: #fff;
+      padding: 12px 14px; border-radius: 8px; font-size: 14px; font-weight: 600; outline: none;
+    }
+    input[type="text"]:focus, input[type="number"]:focus { border-color: var(--accent-yellow); }
+    .currency-pill {
+      display: flex; background: #0f131a; border: 1px solid #2d3748; border-radius: 8px; padding: 2px;
+    }
+    .currency-pill button {
+      border: none; background: transparent; color: var(--text-muted); font-size: 12px; font-weight: 700;
+      padding: 6px 14px; border-radius: 6px; cursor: pointer; transition: all 0.2s;
+    }
+    .currency-pill button.active { background: var(--accent-yellow); color: #000; }
+    .cambio-box { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--text-muted); padding: 2px 4px; }
+    .cambio-box input { width: 75px; padding: 4px 8px; font-size: 12px; text-align: center; border-radius: 6px; }
+    .btn-main {
+      background: var(--accent-yellow); color: #000; border: none; padding: 14px; border-radius: 8px;
+      font-weight: 800; font-size: 14px; letter-spacing: 0.5px; cursor: pointer; text-transform: uppercase; transition: transform 0.1s;
+    }
+    .btn-main:active { transform: scale(0.98); }
+    .btn-clean {
+      background: transparent; border: 1px dashed #334155; color: #cbd5e1; padding: 10px;
+      border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; text-transform: uppercase;
+    }
+    .res-card {
+      display: none; background: #12161f; border: 1px solid var(--accent-yellow); border-radius: 14px;
+      padding: 18px; flex-direction: column; gap: 14px;
+    }
+    .radar-header { display: flex; justify-content: space-between; align-items: center; }
+    .badge-status { font-size: 11px; font-weight: 800; padding: 4px 10px; border-radius: 6px; letter-spacing: 0.5px; }
+    .prod-preview { display: flex; gap: 14px; align-items: center; background: #0b0e14; padding: 12px; border-radius: 10px; }
+    .prod-preview img { width: 56px; height: 56px; border-radius: 6px; object-fit: cover; background: #232936; }
+    .prod-info { display: flex; flex-direction: column; gap: 3px; overflow: hidden; width: 100%; }
+    .prod-title { font-size: 13px; font-weight: 700; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .prod-price { font-size: 17px; font-weight: 800; color: var(--accent-yellow); }
+    .prod-link { font-size: 11px; color: #38bdf8; text-decoration: none; font-weight: 600; display: inline-flex; align-items: center; gap: 4px; }
+    .modalidades-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .mod-box { background: #0b0e14; border: 1px solid #232936; border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 4px; text-align: center; }
+    .mod-tag { font-size: 10px; font-weight: 800; letter-spacing: 0.5px; }
+    .mod-lucro { font-size: 15px; font-weight: 800; font-family: 'JetBrains Mono', monospace; }
+    .mod-margem { font-size: 11px; font-weight: 700; }
+    .btn-wpp {
+      background: #50b07b; color: #fff; border: none; padding: 12px; border-radius: 8px;
+      font-weight: 800; font-size: 12px; cursor: pointer; text-transform: uppercase; letter-spacing: 0.5px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="card-box">
+      <div class="lbl">PRODUTO / SKU / EAN</div>
+      <div class="input-row">
+        <input type="text" id="inTermo" placeholder="Ex: iPhone 17 Pro Max 256GB">
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div class="lbl" id="lblCusto">CUSTO (US$)</div>
+        <div class="currency-pill">
+          <button type="button" id="btnBRL" onclick="setMoeda('BRL')">R$</button>
+          <button type="button" id="btnUSD" class="active" onclick="setMoeda('USD')">US$</button>
+        </div>
+      </div>
+
+      <div class="input-row">
+        <input type="text" id="inCusto" inputmode="numeric" placeholder="0,00" oninput="formatarMoeda(this); atualizarConversao()">
+      </div>
+
+      <div class="cambio-box" id="boxCambio">
+        <span>Cotação US$: R$</span>
+        <input type="text" id="inCotacaoUSD" placeholder="5,1529" oninput="atualizarConversao()">
+      </div>
+      <div id="lblEquivalente" style="font-size: 12px; font-weight: 700; color: var(--accent-yellow); margin-top: -6px;"></div>
+
+      <button type="button" class="btn-main" id="btnAnalise" onclick="auditarViabilidade()">ANALISAR VIABILIDADE ⚡</button>
+    </div>
+
+    <button type="button" class="btn-clean" onclick="novaAnalise()">+ NOVA ANÁLISE</button>
+
+    <div class="res-card" id="cardResultado">
+      <div class="radar-header">
+        <div class="lbl">RADAR AUDITORIA</div>
+        <div class="badge-status" id="stBadge">PROCESSANDO</div>
+      </div>
+
+      <div class="prod-preview">
+        <img id="resImg" src="" alt="Produto">
+        <div class="prod-info">
+          <div class="prod-title" id="resTitulo">Produto</div>
+          <div class="prod-price" id="resPreco">R$ 0,00</div>
+          <a class="prod-link" id="resLink" href="#" target="_blank">INSPECIONAR ANÚNCIO NO ML</a>
+        </div>
+      </div>
+
+      <div class="modalidades-grid">
+        <div class="mod-box">
+          <div class="mod-tag" style="color: #38bdf8;">ML CLÁSSICO</div>
+          <div style="font-size: 10px; color: var(--text-muted);">LUCRO LÍQUIDO</div>
+          <div class="mod-lucro" id="hudLucroC">R$ 0,00</div>
+          <div class="mod-margem" id="hudMargemC">Margem: 0,0%</div>
+        </div>
+        <div class="mod-box">
+          <div class="mod-tag" style="color: var(--accent-yellow);">ML PREMIUM</div>
+          <div style="font-size: 10px; color: var(--text-muted);">LUCRO LÍQUIDO</div>
+          <div class="mod-lucro" id="hudLucroP">R$ 0,00</div>
+          <div class="mod-margem" id="hudMargemP">Margem: 0,0%</div>
+        </div>
+      </div>
+
+      <button type="button" class="btn-wpp" onclick="enviarWhatsAppDireto()">TRANSMITIR VIA WHATSAPP</button>
+    </div>
+  </div>
+
   <script>
+    let moedaAtual = 'USD';
+    let cotacaoDolar = 5.1529;
+    let dadosUltimoRelatorio = null;
+
+    fetch('https://economia.awesomeapi.com.br/last/USD-BRL')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.USDBRL) {
+          cotacaoDolar = parseFloat(data.USDBRL.bid);
+          const inp = document.getElementById('inCotacaoUSD');
+          if (!inp.value) inp.value = cotacaoDolar.toFixed(4).replace('.', ',');
+          atualizarConversao();
+        }
+      }).catch(() => {});
+
+    function setMoeda(m) {
+      moedaAtual = m;
+      document.getElementById('btnBRL').className = m === 'BRL' ? 'active' : '';
+      document.getElementById('btnUSD').className = m === 'USD' ? 'active' : '';
+      document.getElementById('lblCusto').innerText = m === 'USD' ? 'CUSTO (US$)' : 'CUSTO (R$)';
+      document.getElementById('boxCambio').style.display = m === 'USD' ? 'flex' : 'none';
+      atualizarConversao();
+    }
 
     function formatarMoeda(el) {
       let v = el.value.replace(/\D/g, '');
@@ -23,772 +177,190 @@
       return parseFloat(v) || 0;
     }
 
-    let moedaAtual = 'BRL';
-    
-    let cotacaoAutoUSD = 5.60;
-
-    async function carregarCotacaoUSD() {
-      try {
-        const r = await fetch('https://economia.awesomeapi.com.br/last/USD-BRL');
-        const d = await r.json();
-        if (d && d.USDBRL && d.USDBRL.bid) {
-          cotacaoAutoUSD = parseFloat(d.USDBRL.bid);
-          const inCot = document.getElementById('inCotacaoUSD');
-          if (inCot && !inCot.value) inCot.placeholder = cotacaoAutoUSD.toFixed(2);
-          if (typeof atualizarConversao === 'function') atualizarConversao();
-        }
-      } catch (e) {
-        console.log('Falha na API de cambio, usando fallback:', cotacaoAutoUSD);
-      }
-    }
-    carregarCotacaoUSD();
-
     function getCotacaoEfetiva() {
-      const el = document.getElementById('inCotacaoUSD');
-      if (el && el.value) {
-        const m = parseFloat(el.value.replace(',', '.'));
-        if (!isNaN(m) && m > 0) return m;
+      const inp = document.getElementById('inCotacaoUSD');
+      if (inp && inp.value) {
+        let v = inp.value.replace(',', '.');
+        let parsed = parseFloat(v);
+        if (parsed > 0) return parsed;
       }
-      return cotacaoAutoUSD;
-    }
-
-    function formatarMoeda(el) {
-      let v = el.value.replace(/\D/g, '');
-      if (!v) { el.value = ''; return; }
-      let num = (parseInt(v, 10) / 100).toFixed(2);
-      let p = num.split('.');
-      p[0] = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
-      el.value = p.join(',');
-    }
-
-    function getCustoNumerico() {
-      const el = document.getElementById('inCusto');
-      if (!el || !el.value) return 0;
-      let v = el.value.replace(/\./g, '').replace(',', '.').replace(/[^\d.]/g, '');
-      return parseFloat(v) || 0;
-    }
-
-    let dadosUltimoRelatorio = null;
-
-    function setMoeda(m) {
-      moedaAtual = m;
-      document.getElementById('btnBRL').classList.toggle('active', m === 'BRL');
-      document.getElementById('btnUSD').classList.toggle('active', m === 'USD');
-      document.getElementById('lblCusto').innerText = m === 'BRL' ? 'CUSTO (R$)' : 'CUSTO (US$)';
-      document.getElementById('inCusto').placeholder = '0,00';
-      const box = document.getElementById('boxCotacaoUSD');
-      if (box) box.style.display = m === 'USD' ? 'flex' : 'none';
-      atualizarConversao();
+      return cotacaoDolar;
     }
 
     function atualizarConversao() {
-      const val = getCustoNumerico();
-      const prev = document.getElementById('previewConversao');
-      const cot = getCotacaoEfetiva();
-      if (moedaAtual === 'USD' && val > 0) {
-        prev.style.display = 'block';
-        prev.innerText = `≈ R$ ${(val * cot).toFixed(2)} (Câmbio: US$ 1 = R$ ${cot.toFixed(2)})`;
-      } else {
-        prev.style.display = 'none';
-      }
-    }
-
-    function enviarWhatsAppDireto() {
-      if (!dadosUltimoRelatorio) return alert('Realize uma auditoria primeiro.');
-      const r = dadosUltimoRelatorio;
-      const c = r.classico || {};
-      const p = r.premium || {};
-      const cot = (typeof getCotacaoEfetiva === 'function') ? getCotacaoEfetiva() : 5.60;
-      const custoNum = (typeof getCustoNumerico === 'function') ? getCustoNumerico() : (r.custo || 0);
-      const custoFinalBRL = moedaAtual === 'USD' ? (custoNum * cot) : custoNum;
-
-      const preco = Number(r.menor_preco || 0);
-      const taxaC = preco * 0.115;
-      const taxaP = preco * 0.165;
-      const lucroC = Number(c.lucro || 0);
-      const lucroP = Number(p.lucro || 0);
-      const margemC = Number(c.margem || 0);
-      const margemP = Number(p.margem || 0);
-
-      const outrosC = Math.max(0, preco - custoFinalBRL - taxaC - lucroC);
-      const outrosP = Math.max(0, preco - custoFinalBRL - taxaP - lucroP);
-
-      // Tratamento e classificacao de Giro de Vendas
-      const vendasTexto = r.vendas || r.quantidade_vendida || '+1.000 vendidos';
-      let tagGiro = '📦 Giro Moderado';
-      if (/mil|5000|10000/i.test(vendasTexto)) {
-        tagGiro = '🔥 Ultra Giro';
-      } else if (/100|250|500/i.test(vendasTexto)) {
-        tagGiro = '⚡ Alto Giro';
-      } else if (/novo|0 vendido/i.test(vendasTexto)) {
-        tagGiro = '🐢 Anúncio Recente';
-      }
-
-      let statusRadar = '';
-      let pisoMinimo = preco > 3000 ? 4.0 : (preco >= 500 ? 7.0 : 13.0);
-      let margemAlvo = preco > 3000 ? 6.0 : (preco >= 500 ? 11.0 : 18.0);
-
-      if (lucroC <= 0 && lucroP <= 0) {
-        statusRadar = '🔴 PREJUÍZO REAL (Operação no Vermelho)';
-      } else if (margemC < pisoMinimo) {
-        statusRadar = '🟠 ABAIXO DA MÉDIA DE MERCADO (Inviável Operacionalmente)';
-      } else if (margemC >= margemAlvo || tagGiro.includes('Ultra')) {
-        statusRadar = `🟢 OPORTUNIDADE DE ${tagGiro.toUpperCase().replace(/[^A-Z ]/g, '')}
-(Super High Ticket com ${vendasTexto}: margem com liquidez imediata)`;
-      } else {
-        statusRadar = '🟡 MARGEM DE MERCADO (Viável Operacionalmente)';
-      }
-
-      let cabecalhoCusto = '';
+      const custo = getCustoNumerico();
+      const divEquiv = document.getElementById('lblEquivalente');
       if (moedaAtual === 'USD') {
-        cabecalhoCusto = `💵 *Custo Base:* US$ ${custoNum.toFixed(2)} (Câmbio R$ ${cot.toFixed(2)}) ➔ *R$ ${custoFinalBRL.toFixed(2)}*`;
+        const cot = getCotacaoEfetiva();
+        const total = custo * cot;
+        divEquiv.innerText = custo > 0 ? `≈ R$ ${total.toFixed(2)} (Câmbio: US$ 1 = R$ ${cot.toFixed(4)})` : '';
       } else {
-        cabecalhoCusto = `💵 *Custo Base:* R$ ${custoFinalBRL.toFixed(2)}`;
+        divEquiv.innerText = '';
       }
-
-      const msg = `*🤖 SMART MELI ULTRA | ANÁLISE DE VIABILIDADE*
-
-` +
-                  `📦 *Ativo:* ${r.titulo_encontrado || r.titulo || 'Produto'}
-` +
-                  `🎯 *Preço Alvo ML:* R$ ${preco.toFixed(2)}
-` +
-                  `🔥 *Giro de Vendas:* ${tagGiro} (${vendasTexto})
-` +
-                  `${cabecalhoCusto}
-
-` +
-                  `━━━━━━━━━━━━━━━━━━━━━━
-` +
-                  `⚡ *MERCADO LIVRE CLÁSSICO (11.5%)*
-` +
-                  `• Preço Venda: R$ ${preco.toFixed(2)}
-` +
-                  `• (-) Custo Mercadoria: R$ ${custoFinalBRL.toFixed(2)}
-` +
-                  `• (-) Tarifa ML (11.5%): R$ ${taxaC.toFixed(2)}
-` +
-                  (outrosC > 0 ? `• (-) Frete / Custos Operacionais: R$ ${outrosC.toFixed(2)}
-` : '') +
-                  `• (=) *Lucro Líquido: R$ ${lucroC.toFixed(2)}*
-` +
-                  `• 📊 *Margem Líquida: ${margemC.toFixed(1)}%*
-
-` +
-                  `━━━━━━━━━━━━━━━━━━━━━━
-` +
-                  `💎 *MERCADO LIVRE PREMIUM (16.5% - 12x Sem Juros)*
-` +
-                  `• Preço Venda: R$ ${preco.toFixed(2)}
-` +
-                  `• (-) Custo Mercadoria: R$ ${custoFinalBRL.toFixed(2)}
-` +
-                  `• (-) Tarifa ML (16.5%): R$ ${taxaP.toFixed(2)}
-` +
-                  (outrosP > 0 ? `• (-) Frete / Custos Operacionais: R$ ${outrosP.toFixed(2)}
-` : '') +
-                  `• (=) *Lucro Líquido: R$ ${lucroP.toFixed(2)}*
-` +
-                  `• 📊 *Margem Líquida: ${margemP.toFixed(1)}%*
-
-` +
-                  `━━━━━━━━━━━━━━━━━━━━━━
-` +
-                  `🚦 *Veredito Radar:*
-${statusRadar}
-
-` +
-                  `🔗 *Link do Concorrente:* ${r.link || 'N/A'}
-
-` +
-                  `_Auditado via Smart Meli Ultra Core_`;
-
-      const url = 'https://api.whatsapp.com/send?text=' + encodeURIComponent(msg);
-      window.open(url, '_blank');
     }
 
-</script>
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', -apple-system, Roboto, sans-serif; }
-    body { 
-      background: linear-gradient(135deg, #060913 0%, #111827 100%); 
-      color: #ffffff; 
-      padding: 15px; 
-      display: flex; 
-      justify-content: center; 
-      min-height: 100vh;
-      align-items: flex-start;
-    }
-    .app-container { 
-      width: 100%; 
-      max-width: 440px; 
-      background: rgba(17, 24, 39, 0.7); 
-      backdrop-filter: blur(12px);
-      border: 1px solid rgba(255, 230, 0, 0.2); 
-      border-radius: 16px; 
-      padding: 20px 16px; 
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); 
-    }
-    .header { text-align: center; border-bottom: 1px solid rgba(255, 230, 0, 0.15); padding-bottom: 15px; margin-bottom: 15px; }
-    .title-text { font-size: 20px; font-weight: 900; color: #ffffff; display: flex; align-items: center; justify-content: center; gap: 8px; margin-bottom: 5px; }
-    .title-text .highlight { color: #FFE600; }
-    .subtitle { font-size: 9px; color: #94a3b8; text-transform: uppercase; letter-spacing: 3px; font-weight: 600; }
-    .card { background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.05); border-radius: 12px; padding: 15px; margin-bottom: 15px; }
-    label { display: block; font-size: 10px; color: #FFE600; text-transform: uppercase; font-weight: 800; margin-bottom: 6px; }
-    
-    .input-row {
-      display: flex;
-      gap: 8px;
-      margin-bottom: 12px;
-    }
-    input { 
-      width: 100%; background: rgba(30, 41, 59, 0.8); border: 1px solid rgba(255, 255, 255, 0.1); 
-      color: #ffffff; padding: 12px 14px; border-radius: 8px; font-size: 13px; font-weight: 600; 
-    }
-    input:focus { outline: none; border-color: #FFE600; background: rgba(15, 23, 42, 0.9); }
-    input::placeholder { color: #64748b; }
-    
-    .btn-camera {
-      flex: 0 0 52px;
-      background: #FFE600;
-      border: none;
-      border-radius: 8px;
-      font-size: 20px;
-      cursor: pointer;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      box-shadow: 0 4px 10px rgba(255, 230, 0, 0.2);
-    }
-    .btn-camera:active { transform: scale(0.92); }
-
-    .btn-calc { 
-      width: 100%; background: linear-gradient(90deg, #FFE600 0%, #FFD500 100%); border: none; color: #000; 
-      font-weight: 900; padding: 14px; border-radius: 8px; cursor: pointer; font-size: 13px; text-transform: uppercase; 
-      box-shadow: 0 6px 15px rgba(255, 230, 0, 0.25); margin-top: 8px;
-    }
-    .btn-calc:disabled { opacity: 0.6; cursor: not-allowed; }
-
-    .whatsapp-bubble { display: none; background: rgba(8, 17, 30, 0.85); border: 1px solid #FFE600; border-radius: 12px; padding: 15px; font-size: 12px; line-height: 1.6; margin-top: 10px; }
-    .whatsapp-bubble.inviavel { border-color: #ef4444; }
-    .tag-header { color: #00E5FF; font-weight: 900; font-size: 11px; text-transform: uppercase; border-bottom: 1px dashed rgba(0, 229, 255, 0.3); padding-bottom: 6px; margin-bottom: 10px; }
-    .item-row { margin-bottom: 6px; color: #e2e8f0; }
-    .item-row b { color: #ffffff; }
-    .section-box { background: rgba(15, 23, 42, 0.6); border-left: 3px solid #00E5FF; padding: 10px 12px; border-radius: 8px; margin: 10px 0; }
-    .section-box.premium { border-left-color: #FFE600; background: rgba(30, 41, 59, 0.5); }
-    .copy-btn { width: 100%; background: #00a884; border: none; color: #ffffff; font-weight: 800; padding: 12px; border-radius: 8px; cursor: pointer; font-size: 12px; margin-top: 12px; text-transform: uppercase; display: none; }
-    .action-row { display: flex; gap: 10px; margin-top: 15px; }
-    .btn-action { flex: 1; padding: 12px; border-radius: 8px; font-size: 11px; font-weight: 800; cursor: pointer; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.3); color: #cbd5e1; text-transform: uppercase; }
-
-    /* MODAL DE CÂMERA DUAL (BARRAS + FOTO DA CAIXA) */
-    #scannerModal {
-      display: none;
-      position: fixed;
-      top: 0; left: 0; width: 100%; height: 100%;
-      background: rgba(0, 0, 0, 0.95);
-      z-index: 9999;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      padding: 15px;
-    }
-    .scanner-box {
-      width: 100%;
-      max-width: 420px;
-      background: #111827;
-      border: 1px solid #FFE600;
-      border-radius: 12px;
-      padding: 16px;
-      text-align: center;
-    }
-    #readerVideo {
-      width: 100%;
-      min-height: 250px;
-      background: #000;
-      border-radius: 8px;
-      overflow: hidden;
-      margin: 10px 0;
-    }
-    .cam-actions {
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      margin-top: 10px;
-    }
-    .btn-foto-caixa {
-      width: 100%;
-      background: #00E5FF;
-      color: #000;
-      font-weight: 900;
-      border: none;
-      padding: 12px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 12px;
-      text-transform: uppercase;
-    }
-    .btn-cancelar {
-      width: 100%;
-      background: #ef4444;
-      color: #fff;
-      border: none;
-      padding: 10px;
-      border-radius: 8px;
-      font-weight: 800;
-      cursor: pointer;
-      font-size: 11px;
-    }
-  
-    /* BOTOES DE MOEDA */
-    .curr-btn {
-      background: rgba(255,255,255,0.08);
-      border: 1px solid rgba(255,255,255,0.2);
-      color: #94a3b8;
-      border-radius: 6px;
-      padding: 3px 12px;
-      font-size: 11px;
-      font-weight: 800;
-      cursor: pointer;
-      transition: all 0.2s;
-    }
-    .curr-btn.active {
-      background: #FFE600;
-      color: #000000;
-      border-color: #FFE600;
-      font-weight: 900;
+    function novaAnalise() {
+      document.getElementById('cardResultado').style.display = 'none';
+      document.getElementById('inTermo').value = '';
+      document.getElementById('inCusto').value = '';
+      document.getElementById('lblEquivalente').innerText = '';
+      dadosUltimoRelatorio = null;
     }
 
-    /* PAINEL COCKPIT HUD */
-    .hud-panel {
-      display: none;
-      background: #090f1d;
-      border: 1px solid #00E5FF;
-      border-radius: 14px;
-      padding: 16px;
-      margin-top: 14px;
-      box-shadow: 0 0 25px rgba(0, 229, 255, 0.15);
-      animation: fadeIn 0.25s ease-out;
-    }
-    .hud-panel.status-A { border-color: #00FF88; box-shadow: 0 0 25px rgba(0, 255, 136, 0.2); }
-    .hud-panel.status-D { border-color: #FFE600; box-shadow: 0 0 25px rgba(255, 230, 0, 0.2); }
-    .hud-panel.status-E { border-color: #ef4444; box-shadow: 0 0 25px rgba(239, 68, 68, 0.25); }
-
-    .hud-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding-bottom: 8px;
-      border-bottom: 1px dashed rgba(255,255,255,0.15);
-      margin-bottom: 12px;
-    }
-    .hud-tag { font-size: 10px; font-weight: 900; letter-spacing: 0.5px; text-transform: uppercase; }
-    .badge-status { padding: 4px 8px; border-radius: 4px; font-weight: 900; font-size: 10px; }
-
-    /* CARD DO PRODUTO AUDITADO */
-    .hud-product-card {
-      display: flex;
-      gap: 12px;
-      background: rgba(255,255,255,0.03);
-      padding: 10px;
-      border-radius: 10px;
-      margin-bottom: 12px;
-      align-items: center;
-      border: 1px solid rgba(255,255,255,0.06);
-    }
-    .hud-thumb {
-      width: 70px;
-      height: 70px;
-      object-fit: contain;
-      background: #ffffff;
-      border-radius: 8px;
-      padding: 2px;
-      flex-shrink: 0;
-    }
-    .hud-pdetails { flex: 1; min-width: 0; }
-    .hud-title {
-      font-size: 12px;
-      font-weight: 700;
-      color: #f8fafc;
-      line-height: 1.3;
-      margin-bottom: 4px;
-      display: -webkit-box;
-      -webkit-line-clamp: 2;
-      -webkit-box-orient: vertical;
-      overflow: hidden;
-    }
-    .hud-price { font-size: 15px; font-weight: 900; color: #FFE600; }
-    .hud-link { font-size: 10px; color: #00E5FF; text-decoration: none; font-weight: 800; display: inline-block; margin-top: 3px; }
-    .hud-link:hover { text-decoration: underline; }
-
-    /* GRADE DUAL: CLASSICO VS PREMIUM */
-    .viab-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin-bottom: 14px;
-    }
-    .viab-box {
-      background: rgba(15, 23, 42, 0.75);
-      border-radius: 10px;
-      padding: 10px 8px;
-      border: 1px solid rgba(0, 229, 255, 0.25);
-      text-align: center;
-    }
-    .viab-box.prem { border-color: rgba(255, 230, 0, 0.35); background: rgba(30, 41, 59, 0.6); }
-    .viab-lbl { font-size: 9px; font-weight: 800; color: #94a3b8; text-transform: uppercase; margin-bottom: 2px; }
-    .viab-lucro { font-size: 14px; font-weight: 900; margin: 3px 0; }
-    .viab-margem { font-size: 11px; font-weight: 800; }
-
-    .btn-send-wpp {
-      width: 100%;
-      background: linear-gradient(90deg, #25D366 0%, #128C7E 100%);
-      color: #ffffff;
-      border: none;
-      font-weight: 900;
-      padding: 12px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 11px;
-      text-transform: uppercase;
-      box-shadow: 0 4px 12px rgba(37, 211, 102, 0.25);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: 6px;
-      margin-bottom: 8px;
-    }
-
-</style>
-</head>
-<body>
-  <div class="app-container">
-    <div class="header">
-      <div class="title-text">🤖 SMART <span class="highlight">MELI</span> ULTRA</div>
-      <div class="subtitle">Análise de alta performance</div>
-    </div>
-    
-    <div class="card">
-      <label>PRODUTO / SKU / EAN</label>
-      <div class="input-row">
-        <input id="inProd" type="text" placeholder="Cole o Link, MLB ou escaneie...">
-        <button type="button" class="btn-camera" onclick="abrirCamera()" title="Câmera: Código ou Foto">📷</button>
-      </div>
-
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-        <label id="lblCusto" style="margin: 0;">CUSTO (R$)</label>
-        <div style="display: flex; gap: 4px;">
-          <button type="button" id="btnBRL" class="curr-btn active" onclick="setMoeda('BRL')">R$</button>
-          <button type="button" id="btnUSD" class="curr-btn" onclick="setMoeda('USD')">US$</button>
-        </div>
-      </div>
-      <div style="margin-bottom: 4px;">
-        <input id="inCusto" type="text" inputmode="numeric" placeholder="0,00" oninput="formatarMoeda(this); atualizarConversao()">
-      </div>
-        <div id="boxCotacaoUSD" style="display: none; align-items: center; justify-content: space-between; font-size: 11px; margin-top: 6px; margin-bottom: 6px; background: rgba(255,255,255,0.04); padding: 6px 10px; border-radius: 6px; border: 1px solid #334155;">
-          <span style="color: #94a3b8;">Cotação US$: R$</span>
-          <input id="inCotacaoUSD" type="number" step="0.01" style="width: 75px; text-align: center; padding: 2px 4px; font-size: 11px; border-radius: 4px; background: #0f172a; color: #00FF88; border: 1px solid #3b82f6; font-weight: bold;" placeholder="Auto" oninput="atualizarConversao()">
-          <span style="color: #64748b; font-size: 10px;">(Vazio = Oficial)</span>
-        </div>
-      <div id="previewConversao" style="display: none; font-size: 11px; color: #FFE600; font-weight: 700; margin-bottom: 8px;"></div>
-
-      <button class="btn-calc" id="btnAcao" onclick="executarCalculo()">ANALISAR VIABILIDADE ⚡</button>
-    </div>
-    
-    <div class="action-row" id="areaBotoes" style="margin-top: 10px;">
-        <button type="button" class="btn-action" onclick="novoCalculo()">+ NOVA ANÁLISE</button>
-      </div>
-
-      <!-- PAINEL COCKPIT HUD -->
-      <div id="hudPainel" class="hud-panel">
-        <div class="hud-header">
-          <span class="hud-tag" style="color: #00E5FF;">⚡ RADAR AUDITORIA</span>
-          <span id="hudStatusBadge" class="badge-status">VIÁVEL</span>
-        </div>
-
-        <div class="hud-product-card">
-          <img id="hudImg" class="hud-thumb" src="" alt="Produto">
-          <div class="hud-pdetails">
-            <div id="hudTitulo" class="hud-title">Título do Concorrente</div>
-            <div class="hud-price" id="hudPreco">R$ 0,00</div>
-            <a id="hudLink" class="hud-link" href="#" target="_blank">🔗 INSPECIONAR ANÚNCIO NO ML</a>
-          </div>
-        </div>
-
-        <div class="viab-grid">
-          <div class="viab-box" id="cardClassico">
-            <div class="viab-lbl" style="color: #00E5FF;">ML CLÁSSICO</div>
-            <div class="viab-lbl">LUCRO LÍQUIDO</div>
-            <div class="viab-lucro" id="hudLucroC">R$ 0,00</div>
-            <div class="viab-margem" id="hudMargemC">Margem: 0%</div>
-          </div>
-          <div class="viab-box prem" id="cardPremium">
-            <div class="viab-lbl" style="color: #FFE600;">ML PREMIUM</div>
-            <div class="viab-lbl">LUCRO LÍQUIDO</div>
-            <div class="viab-lucro" id="hudLucroP">R$ 0,00</div>
-            <div class="viab-margem" id="hudMargemP">Margem: 0%</div>
-          </div>
-        </div>
-
-        <button type="button" class="btn-send-wpp" onclick="enviarWhatsAppDireto()">
-          📲 TRANSMITIR VIA WHATSAPP
-        </button>
-        <button type="button" class="copy-btn" id="btnCopiar" style="display: block; margin-top: 0;" onclick="copiarWhatsApp()">
-          📋 COPIAR RELATÓRIO TÉCNICO
-        </button>
-      </div>
-  </div>
-
-  <!-- MODAL DA CÂMERA -->
-  <div id="scannerModal">
-    <div class="scanner-box">
-      <h3 style="color: #FFE600; font-size: 15px; margin-bottom: 2px;">Câmera Inteligente</h3>
-      <p id="camStatus" style="color: #94a3b8; font-size: 11px;">Bipe o código de barras OU tire foto da embalagem</p>
-      
-      <div id="readerVideo"></div>
-
-      <div class="cam-actions">
-        <button type="button" class="btn-foto-caixa" id="btnSnap" onclick="capturarFotoCaixa()">📸 TIRAR FOTO DA CAIXA (IA)</button>
-        <button type="button" class="btn-cancelar" onclick="fecharCamera()">CANCELAR</button>
-      </div>
-    </div>
-  </div>
-
-  <script>
-    let dossieWhats = "";
-    let html5QrScanner = null;
-
-    // 1. SCANNER CONTÍNUO (BARRAS) + FOTO DA EMBALAGEM
-    function abrirCamera() {
-      document.getElementById('scannerModal').style.display = 'flex';
-      document.getElementById('camStatus').innerText = "Bipe o código OU tire foto da embalagem";
-      document.getElementById('btnSnap').innerText = "📸 TIRAR FOTO DA CAIXA (IA)";
-      document.getElementById('btnSnap').disabled = false;
-
-      if (!html5QrScanner) {
-        html5QrScanner = new Html5Qrcode("readerVideo");
-      }
-
-      const config = { fps: 30, qrbox: { width: 280, height: 120 } };
-
-      html5QrScanner.start(
-        { facingMode: "environment" },
-        config,
-        (decodedText) => {
-          tocarBipe();
-          document.getElementById('inProd').value = decodedText.trim();
-          fecharCamera();
-          document.getElementById('inCusto').focus();
-        },
-        (err) => {}
-      ).catch((err) => {
-        alert("Acesso à câmera bloqueado. Permita a câmera no seu navegador.");
-        fecharCamera();
-      });
-    }
-
-    // CAPTURA FRAME DE VÍDEO E MANDA PARA GEMINI VISION
-    async function capturarFotoCaixa() {
-      const videoElem = document.querySelector("#readerVideo video");
-      if (!videoElem) {
-        alert("Câmera ainda não carregou o vídeo.");
+    async function auditarViabilidade() {
+      const termo = document.getElementById('inTermo').value.trim();
+      const custoOriginal = getCustoNumerico();
+      if (!termo || custoOriginal <= 0) {
+        alert('Informe o produto e o custo base.');
         return;
       }
 
-      const btnSnap = document.getElementById('btnSnap');
-      const camStatus = document.getElementById('camStatus');
-      btnSnap.innerText = "Lendo embalagem com IA...";
-      btnSnap.disabled = true;
-      camStatus.innerText = "Reconhecendo marca e modelo via IA...";
+      const cot = getCotacaoEfetiva();
+      const custoRealBRL = moedaAtual === 'USD' ? (custoOriginal * cot) : custoOriginal;
 
-      try {
-        const canvas = document.createElement("canvas");
-        canvas.width = videoElem.videoWidth || 640;
-        canvas.height = videoElem.videoHeight || 480;
-        const ctx = canvas.getContext("2d");
-        ctx.drawImage(videoElem, 0, 0, canvas.width, canvas.height);
-        const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
-
-        const resp = await fetch('/reconhecer-imagem', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imagem_base64: dataUrl })
-        });
-
-        const res = await resp.json();
-        if (res.sucesso && res.produto) {
-          tocarBipe();
-          document.getElementById('inProd').value = res.produto;
-          fecharCamera();
-          document.getElementById('inCusto').focus();
-        } else {
-          alert(res.mensagem || "Não foi possível identificar o produto na foto. Tente aproximar da marca/modelo.");
-          btnSnap.innerText = "📸 TIRAR FOTO DA CAIXA (IA)";
-          btnSnap.disabled = false;
-          camStatus.innerText = "Bipe o código OU tire foto da embalagem";
-        }
-      } catch (e) {
-        alert("Erro de conexão com o servidor local: " + e.message);
-        btnSnap.innerText = "📸 TIRAR FOTO DA CAIXA (IA)";
-        btnSnap.disabled = false;
-        camStatus.innerText = "Bipe o código OU tire foto da embalagem";
-      }
-    }
-
-    function fecharCamera() {
-      if (html5QrScanner) {
-        html5QrScanner.stop().then(() => {
-          document.getElementById('scannerModal').style.display = 'none';
-        }).catch(() => {
-          document.getElementById('scannerModal').style.display = 'none';
-        });
-      } else {
-        document.getElementById('scannerModal').style.display = 'none';
-      }
-    }
-
-    function tocarBipe() {
-      try {
-        const ctx = new (window.AudioContext || window.webkitAudioContext)();
-        const osc = ctx.createOscillator();
-        osc.type = 'sine';
-        osc.frequency.setValueAtTime(1000, ctx.currentTime);
-        osc.connect(ctx.destination);
-        osc.start();
-        osc.stop(ctx.currentTime + 0.15);
-      } catch (e) {}
-    }
-
-    // 2. AUDITORIA CONTÁBIL
-    async function executarCalculo() {
-      const prod = document.getElementById('inProd').value.trim();
-      const custoRaw = getCustoNumerico();
-      if (!prod || isNaN(custoRaw) || custoRaw <= 0) return alert('Insira o produto e o custo base.');
-      const cotacaoEfetiva = (typeof getCotacaoEfetiva === 'function') ? getCotacaoEfetiva() : 5.60;
-      const custo = moedaAtual === 'USD' ? Number((custoRaw * cotacaoEfetiva).toFixed(2)) : custoRaw;
-
-      const btn = document.getElementById('btnAcao');
-      btn.innerText = 'Buscando Oportunidades... ⚡'; 
+      const btn = document.getElementById('btnAnalise');
+      btn.innerText = 'BUSCANDO...';
       btn.disabled = true;
-      const _rb = document.getElementById('resBox'); if (_rb) _rb.style.display = 'none'; const _hud = document.getElementById('hudPainel'); if (_hud) _hud.style.display = 'none'; 
-      const _bc = document.getElementById('btnCopiar'); if (_bc) _bc.style.display = 'none';
 
       try {
-        const resp = await fetch('/analisar', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ titulo: prod, custo: custo, moeda: moedaAtual, cotacao: getCotacaoEfetiva() })
-        });
-
-        const res = await resp.json();
-        btn.innerText = 'Auditar Concorrência ⚡'; 
+        const res = await fetch(`http://127.0.0.1:8005/buscar?termo=${encodeURIComponent(termo)}&custo=${custoRealBRL}`);
         
-          dadosUltimoRelatorio = res;
-          btn.innerText = 'ANALISAR VIABILIDADE ⚡';
-          btn.disabled = false;
+        let data;
+        const textData = await res.text();
+        try {
+            data = JSON.parse(textData);
+        } catch(e) {
+            data = JSON.parse(textData.replace(/^"|"$/g, '').replace(/\\"/g, '"'));
+        }
+        
+        if (data && data.resultado) { data = data.resultado; }
 
-          const hud = document.getElementById('hudPainel');
-          const stBadge = document.getElementById('hudStatusBadge');
-
-          if (!res.sucesso) {
-            hud.className = 'hud-panel status-E';
-            hud.style.display = 'block';
-            stBadge.innerText = '🔴 NÃO LOCALIZADO';
-            stBadge.style.background = 'rgba(239,68,68,0.2)';
-            stBadge.style.color = '#ef4444';
-            document.getElementById('hudTitulo').innerText = res.mensagem || 'Concorrência não encontrada.';
-            document.getElementById('hudPreco').innerText = '---';
-            document.getElementById('hudImg').src = 'https://http2.mlstatic.com/frontend-assets/ui-navigation/5.18.9/mercadolibre/logo__small.png';
-            document.getElementById('hudLink').style.display = 'none';
-            return;
-          }
-
-          hud.className = 'hud-panel status-' + res.status;
-          stBadge.innerText = (c.margem >= 6.0 || p.margem >= 6.0) ? '🟢 OPORTUNIDADE' : ((c.lucro <= 0 && p.lucro <= 0) ? '🔴 PREJUÍZO' : '🟡 MARGEM CRÍTICA');
-          stBadge.style.background = (c.margem >= 6.0 || p.margem >= 6.0) ? 'rgba(0,255,136,0.15)' : ((c.lucro <= 0 && p.lucro <= 0) ? 'rgba(239,68,68,0.15)' : 'rgba(255,230,0,0.15)');
-          stBadge.style.color = (c.margem >= 6.0 || p.margem >= 6.0) ? '#00FF88' : ((c.lucro <= 0 && p.lucro <= 0) ? '#ef4444' : '#FFE600');
-
-          document.getElementById('hudTitulo').innerText = res.titulo_encontrado || res.titulo;
-          document.getElementById('hudPreco').innerText = 'R$ ' + res.menor_preco.toFixed(2);
-          document.getElementById('hudImg').src = res.imagem || 'https://http2.mlstatic.com/frontend-assets/ui-navigation/5.18.9/mercadolibre/logo__small.png';
-
-          const lk = document.getElementById('hudLink');
-          if (res.link) { lk.href = res.link; lk.style.display = 'inline-block'; } else { lk.style.display = 'none'; }
-
-          // Classico
-          const c = res.classico;
-          document.getElementById('hudLucroC').innerText = 'R$ ' + c.lucro.toFixed(2);
-          document.getElementById('hudLucroC').style.color = c.lucro >= 0 ? '#00FF88' : '#ef4444';
-          document.getElementById('hudMargemC').innerText = 'Margem: ' + c.margem.toFixed(1) + '%';
-          document.getElementById('hudMargemC').style.color = c.margem >= 6.0 ? '#00FF88' : (c.margem > 0 ? '#FFE600' : '#ef4444');
-
-          // Premium
-          const p = res.premium;
-          document.getElementById('hudLucroP').innerText = 'R$ ' + p.lucro.toFixed(2);
-          document.getElementById('hudLucroP').style.color = p.lucro >= 0 ? '#FFE600' : '#ef4444';
-          document.getElementById('hudMargemP').innerText = 'Margem: ' + p.margem.toFixed(1) + '%';
-          document.getElementById('hudMargemP').style.color = p.margem >= 6.0 ? '#00FF88' : (p.margem > 0 ? '#FFE600' : '#ef4444');
-
-          dossieWhats = `*🤖 SMART MELI ULTRA | AUDITORIA*
-
-` +
-                        `📦 *Produto:* ${res.titulo_encontrado || res.titulo}
-` +
-                        `🎯 *Menor Preço ML:* R$ ${res.menor_preco.toFixed(2)}
-` +
-                        `💵 *Seu Custo Base:* R$ ${(res.custo_base || custo || 0).toFixed(2)}
-
-` +
-                        `⚡ *ML Clássico (11.5%):* Lucro R$ ${c.lucro.toFixed(2)} (${c.margem.toFixed(1)}%)
-` +
-                        `💎 *ML Premium (16.5%):* Lucro R$ ${p.lucro.toFixed(2)} (${p.margem.toFixed(1)}%)
-
-` +
-                        `🔗 *Link:* ${res.link}`;
-
-          hud.style.display = 'block';
-          return;
-
-
-        resBox.className = 'whatsapp-bubble';
-        if ((c.lucro <= 0 && p.lucro <= 0)) resBox.classList.add('inviavel');
-
-        resBox.innerHTML = 
-          '<div class="tag-header">⚡ SMART MELI | AUDITORIA</div>' +
-          '<div class="item-row">📦 <b>ATIVO:</b> ' + res.titulo + '</div>' +
-          '<div class="item-row">💵 <b>CUSTO:</b> R$ ' + custo.toFixed(2).replace('.', ',') + '</div>' +
-          '<div class="item-row" style="margin-top:8px;">🎯 <b>ALVO BUYBOX:</b> <span style="font-weight:900; font-size:14px; ' + cM + '">R$ ' + res.menor_preco.toFixed(2).replace('.', ',') + '</span></div>' +
-          '<div class="section-box"><div style="font-weight:800;font-size:10.5px;color:#00E5FF;margin-bottom:4px;">📊 CLÁSSICO (11,5%)</div>' +
-          '<div style="display:flex; justify-content:space-between;"><span>Venda: <b>R$ ' + c.preco.toFixed(2).replace('.', ',') + '</b></span>' +
-          '<span>Lucro: <b style="' + cM + '">R$ ' + c.lucro.toFixed(2).replace('.', ',') + ' (' + c.margem + '%)</b></span></div></div>' +
-          '<div class="section-box premium"><div style="font-weight:800;font-size:10.5px;color:#FFE600;margin-bottom:4px;">🏆 PREMIUM (16,5%)</div>' +
-          '<div style="display:flex; justify-content:space-between;"><span>Venda: <b>R$ ' + p.preco.toFixed(2).replace('.', ',') + '</b></span>' +
-          '<span>Lucro: <b style="' + cM + '">R$ ' + p.lucro.toFixed(2).replace('.', ',') + ' (' + p.margem + '%)</b></span></div></div>' +
-          '<div class="item-row" style="margin-top:10px;">📈 <b>VEREDITO:</b> ' + viabTexto + '</div>';
-
-        resBox.style.display = 'block';
-        document.getElementById('btnCopiar').style.display = 'block';
-
-      } catch (err) {
-        btn.innerText = 'Auditar Concorrência ⚡'; 
+        btn.innerText = 'ANALISAR VIABILIDADE ⚡';
         btn.disabled = false;
-        alert('Erro de conexão com o servidor local.');
+
+        if (!data || data.status === 'nao_encontrado' || (!data.menor_preco && !data.preco)) {
+          alert('Nenhum anúncio correspondente localizado.');
+          return;
+        }
+
+        dadosUltimoRelatorio = data;
+        exibirResultado(data, custoRealBRL);
+      } catch (err) {
+        console.error(err);
+        btn.innerText = 'ANALISAR VIABILIDADE ⚡';
+        btn.disabled = false;
+        alert('Erro de conexão com o servidor local (127.0.0.1:8005). Certifique-se de que o local_worker.py está rodando.');
       }
     }
 
-    function copiarWhatsApp() {
-      if (!dossieWhats) return;
-      navigator.clipboard.writeText(dossieWhats);
-      document.getElementById('btnCopiar').innerText = '✅ Relatório Copiado!';
-      setTimeout(() => { document.getElementById('btnCopiar').innerText = '📋 COPIAR RELATÓRIO WA'; }, 2000);
+    function exibirResultado(r, custoCompraBRL) {
+      document.getElementById('cardResultado').style.display = 'flex';
+      
+      const precoAlvo = Number(r.menor_preco || r.preco || 0);
+      document.getElementById('resTitulo').innerText = r.titulo_encontrado || r.titulo || 'Produto Localizado';
+      document.getElementById('resPreco').innerText = 'R$ ' + precoAlvo.toFixed(2);
+      document.getElementById('resLink').href = r.link || '#';
+      if (r.imagem) document.getElementById('resImg').src = r.imagem;
+
+      const freteVendedor = precoAlvo >= 79.0 ? 9.55 : 0.0;
+
+      const comissaoC = precoAlvo * 0.115;
+      const impostoC = precoAlvo * 0.06;
+      const avariasC = precoAlvo * 0.015;
+      const custoTotalC = custoCompraBRL + freteVendedor + comissaoC + impostoC + avariasC;
+      const lucroC = precoAlvo - custoTotalC;
+      const margemC = precoAlvo > 0 ? (lucroC / precoAlvo) * 100 : 0;
+
+      const comissaoP = precoAlvo * 0.165;
+      const impostoP = precoAlvo * 0.06;
+      const avariasP = precoAlvo * 0.015;
+      const custoTotalP = custoCompraBRL + freteVendedor + comissaoP + impostoP + avariasP;
+      const lucroP = precoAlvo - custoTotalP;
+      const margemP = precoAlvo > 0 ? (lucroP / precoAlvo) * 100 : 0;
+
+      document.getElementById('hudLucroC').innerText = 'R$ ' + lucroC.toFixed(2);
+      document.getElementById('hudMargemC').innerText = 'Margem: ' + margemC.toFixed(1) + '%';
+      document.getElementById('hudLucroP').innerText = 'R$ ' + lucroP.toFixed(2);
+      document.getElementById('hudMargemP').innerText = 'Margem: ' + margemP.toFixed(1) + '%';
+
+      const piso = precoAlvo > 3000 ? 3.0 : (precoAlvo >= 500 ? 6.0 : 12.0);
+      const alvo = precoAlvo > 3000 ? 6.0 : (precoAlvo >= 500 ? 9.0 : 15.0);
+
+      const stBadge = document.getElementById('stBadge');
+      if (lucroC <= 0 && lucroP <= 0) {
+        stBadge.innerText = 'PREJUÍZO';
+        stBadge.style.color = '#ef4444';
+        stBadge.style.background = 'rgba(239,68,68,0.15)';
+      } else if (margemC < piso && margemP < piso) {
+        stBadge.innerText = 'ABAIXO DA MÉDIA';
+        stBadge.style.color = '#f97316';
+        stBadge.style.background = 'rgba(249,115,22,0.15)';
+      } else if (margemC >= alvo || margemP >= alvo || lucroC >= 150) {
+        stBadge.innerText = 'OPORTUNIDADE';
+        stBadge.style.color = '#00FF88';
+        stBadge.style.background = 'rgba(0,255,136,0.15)';
+      } else {
+        stBadge.innerText = 'MARGEM DE MERCADO';
+        stBadge.style.color = '#FFE600';
+        stBadge.style.background = 'rgba(255,230,0,0.15)';
+      }
+
+      document.getElementById('hudMargemC').style.color = (margemC >= alvo || lucroC >= 150) ? '#00FF88' : (margemC > 0 ? '#FFE600' : '#ef4444');
+      document.getElementById('hudMargemP').style.color = (margemP >= alvo || lucroP >= 150) ? '#00FF88' : (margemP > 0 ? '#FFE600' : '#ef4444');
     }
 
-    function novoCalculo() {
-      document.getElementById('inProd').value = '';
-      document.getElementById('inCusto').value = '';
-      const hud = document.getElementById('hudPainel');
-      if (hud) hud.style.display = 'none';
-      setMoeda('BRL');
-      document.getElementById('inProd').focus();
+    function enviarWhatsAppDireto() {
+      if (!dadosUltimoRelatorio) { alert('Realize uma auditoria primeiro.'); return; }
+      
+      const r = dadosUltimoRelatorio;
+      const cot = getCotacaoEfetiva();
+      const custoNum = getCustoNumerico();
+      const custoCompra = moedaAtual === 'USD' ? Number((custoNum * cot).toFixed(2)) : custoNum;
+      
+      const precoAlvo = Number(r.menor_preco || r.preco || 0);
+      const freteVendedor = precoAlvo >= 79.0 ? 9.55 : 0.0;
+
+      const comissaoC = Number((precoAlvo * 0.115).toFixed(2));
+      const impostoC = Number((precoAlvo * 0.060).toFixed(2));
+      const avariasC = Number((precoAlvo * 0.015).toFixed(2));
+      const custoTotalC = Number((custoCompra + freteVendedor + comissaoC + impostoC + avariasC).toFixed(2));
+      const lucroC = Number((precoAlvo - custoTotalC).toFixed(2));
+      const margemC = precoAlvo > 0 ? ((lucroC / precoAlvo) * 100).toFixed(1).replace('.', ',') : '0,0';
+      const precoSugC = Number(((custoCompra + freteVendedor) / 0.75).toFixed(2));
+
+      const comissaoP = Number((precoAlvo * 0.165).toFixed(2));
+      const impostoP = Number((precoAlvo * 0.060).toFixed(2));
+      const avariasP = Number((precoAlvo * 0.015).toFixed(2));
+      const custoTotalP = Number((custoCompra + freteVendedor + comissaoP + impostoP + avariasP).toFixed(2));
+      const lucroP = Number((precoAlvo - custoTotalP).toFixed(2));
+      const margemP = precoAlvo > 0 ? ((lucroP / precoAlvo) * 100).toFixed(1).replace('.', ',') : '0,0';
+      const precoSugP = Number(((custoCompra + freteVendedor) / 0.70).toFixed(2));
+
+      const agora = new Date();
+      const dataStr = agora.toLocaleDateString('pt-BR');
+      const horaStr = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      const vendasQtd = r.vendas || r.quantidade_vendida || '+1.000 un';
+
+      let linhaCusto = moedaAtual === 'USD' ? 
+        'Custo de Aquisicao (CMV): US$ ' + custoNum.toFixed(2) + ' (Cambio R$ ' + cot.toFixed(4) + ') -> R$ ' + custoCompra.toFixed(2) : 
+        'Custo de Aquisicao (CMV): R$ ' + custoCompra.toFixed(2);
+
+      let parecerTexto = 'Veredito: OPORTUNIDADE DE ALTA PERFORMANCE\\nEstrategia: ANUNCIO DUPLO (RECOMENDADO)\\nFundamentacao: Margens liquidas superam a media historica do nicho. Risco de estoque nulo. Recomenda-se publicar anuncio Premium a R$ ' + precoAlvo.toFixed(2) + ' para tracionar o parcelamento sem juros e anuncio Classico com desconto a vista para capturar o BuyBox.';
+      if (lucroC <= 0 && lucroP <= 0) { parecerTexto = 'Veredito: REPROVADO (PREJUIZO OPERACIONAL)\\nEstrategia: NAO ADQUIRIR\\nFundamentacao: Custos de aquisicao superam a receita.'; }
+      else if (lucroP <= 0) { parecerTexto = 'Veredito: RESTRITO AO CANAL CLASSICO\\nEstrategia: EXCLUSIVO A VISTA\\nFundamentacao: O parcelamento 12x corroi o lucro.'; }
+
+      const msg = 'SMART MELI ULTRA | ANÁLISE DE VIABILIDADE\\nEXTRATO DE AUDITORIA CONTÁBIL E PRECIFICACAO\\nEmissao: ' + dataStr + ' as ' + horaStr + '\\n\\n' +
+                  'DADOS DO ATIVO\\nProduto: ' + (r.titulo_encontrado || r.titulo || 'Produto') + '\\nMenor Preco Mercado Livre: R$ ' + precoAlvo.toFixed(2) + '\\nLiquidez / Volume: Alto Giro (' + vendasQtd + '/mes)\\n' + linhaCusto + '\\nFrete Mercado Envios: R$ ' + freteVendedor.toFixed(2) + ' (0,58 kg faturado | Subsidio 50%)\\n\\n' +
+                  '========================================\\n1. DEMONSTRATIVO FINANCEIRO - ML CLASSICO (11,5%)\\n========================================\\n' +
+                  '(+) Preco de Venda:                R$ ' + precoAlvo.toFixed(2) + '\\n(-) Custo de Aquisicao (CMV):      R$ ' + custoCompra.toFixed(2) + '\\n(-) Frete Mercado Envios:          R$     ' + freteVendedor.toFixed(2) + '\\n(-) Comissao ML (11,5%):           R$   ' + comissaoC.toFixed(2) + '\\n(-) Imposto Faturamento (6,0%):    R$   ' + impostoC.toFixed(2) + '\\n(-) Provisao Avarias (1,5%):       R$   ' + avariasC.toFixed(2) + '\\n----------------------------------------\\n' +
+                  '(=) Custo Total Absorvido:         R$ ' + custoTotalC.toFixed(2) + '\\n(=) LUCRO LIQUIDO REAL:            R$ ' + lucroC.toFixed(2) + '\\n(=) MARGEM LIQUIDA REAL:           ' + margemC + '%\\nPreco Minimo Sugerido (Meta 6%):   R$ ' + precoSugC.toFixed(2) + '\\nVeredito Canal:                    ' + (lucroC > 0 ? 'OPORTUNIDADE (ALTA MARGEM)' : 'PREJUIZO') + '\\n\\n' +
+                  '========================================\\n2. DEMONSTRATIVO FINANCEIRO - ML PREMIUM (16,5% - 12x)\\n========================================\\n' +
+                  '(+) Preco de Venda:                R$ ' + precoAlvo.toFixed(2) + '\\n(-) Custo de Aquisicao (CMV):      R$ ' + custoCompra.toFixed(2) + '\\n(-) Frete Mercado Envios:          R$     ' + freteVendedor.toFixed(2) + '\\n(-) Comissao ML (16,5%):           R$ ' + comissaoP.toFixed(2) + '\\n(-) Imposto Faturamento (6,0%):    R$   ' + impostoP.toFixed(2) + '\\n(-) Provisao Avarias (1,5%):       R$   ' + avariasP.toFixed(2) + '\\n----------------------------------------\\n' +
+                  '(=) Custo Total Absorvido:         R$ ' + custoTotalP.toFixed(2) + '\\n(=) LUCRO LIQUIDO REAL:            R$ ' + lucroP.toFixed(2) + '\\n(=) MARGEM LIQUIDA REAL:           ' + margemP + '%\\nPreco Minimo Sugerido (Meta 6%):   R$ ' + precoSugP.toFixed(2) + '\\nVeredito Canal:                    ' + (lucroP > 0 ? 'OPORTUNIDADE (ALTO GIRO)' : 'PREJUIZO') + '\\n\\n' +
+                  '========================================\\nPARECER DA AUDITORIA IA\\n========================================\\n' + parecerTexto + '\\n\\nLink Concorrente / Lider:\\n' + (r.link || 'N/A') + '\\n\\n_Smart Meli Ultra Core • Inteligência em Avançada_';
+      
+      const url = 'https://api.whatsapp.com/send?text=' + encodeURIComponent(msg);
+      window.open(url, '_blank');
     }
   </script>
 </body>
