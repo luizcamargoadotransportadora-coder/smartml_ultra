@@ -94,8 +94,116 @@
     }
 
     function enviarWhatsAppDireto() {
-      if (!dossieWhats) return alert('Realize uma auditoria primeiro.');
-      const url = 'https://api.whatsapp.com/send?text=' + encodeURIComponent(dossieWhats);
+      if (!dadosUltimoRelatorio) return alert('Realize uma auditoria primeiro.');
+      const r = dadosUltimoRelatorio;
+      const c = r.classico || {};
+      const p = r.premium || {};
+      const cot = (typeof getCotacaoEfetiva === 'function') ? getCotacaoEfetiva() : 5.60;
+      const custoNum = (typeof getCustoNumerico === 'function') ? getCustoNumerico() : (r.custo || 0);
+      const custoFinalBRL = moedaAtual === 'USD' ? (custoNum * cot) : custoNum;
+
+      const preco = Number(r.menor_preco || 0);
+      const taxaC = preco * 0.115;
+      const taxaP = preco * 0.165;
+      const lucroC = Number(c.lucro || 0);
+      const lucroP = Number(p.lucro || 0);
+      const margemC = Number(c.margem || 0);
+      const margemP = Number(p.margem || 0);
+
+      const outrosC = Math.max(0, preco - custoFinalBRL - taxaC - lucroC);
+      const outrosP = Math.max(0, preco - custoFinalBRL - taxaP - lucroP);
+
+      // Tratamento e classificacao de Giro de Vendas
+      const vendasTexto = r.vendas || r.quantidade_vendida || '+1.000 vendidos';
+      let tagGiro = '📦 Giro Moderado';
+      if (/mil|5000|10000/i.test(vendasTexto)) {
+        tagGiro = '🔥 Ultra Giro';
+      } else if (/100|250|500/i.test(vendasTexto)) {
+        tagGiro = '⚡ Alto Giro';
+      } else if (/novo|0 vendido/i.test(vendasTexto)) {
+        tagGiro = '🐢 Anúncio Recente';
+      }
+
+      let statusRadar = '';
+      let pisoMinimo = preco > 3000 ? 4.0 : (preco >= 500 ? 7.0 : 13.0);
+      let margemAlvo = preco > 3000 ? 6.0 : (preco >= 500 ? 11.0 : 18.0);
+
+      if (lucroC <= 0 && lucroP <= 0) {
+        statusRadar = '🔴 PREJUÍZO REAL (Operação no Vermelho)';
+      } else if (margemC < pisoMinimo) {
+        statusRadar = '🟠 ABAIXO DA MÉDIA DE MERCADO (Inviável Operacionalmente)';
+      } else if (margemC >= margemAlvo || tagGiro.includes('Ultra')) {
+        statusRadar = `🟢 OPORTUNIDADE DE ${tagGiro.toUpperCase().replace(/[^A-Z ]/g, '')}
+(Super High Ticket com ${vendasTexto}: margem com liquidez imediata)`;
+      } else {
+        statusRadar = '🟡 MARGEM DE MERCADO (Viável Operacionalmente)';
+      }
+
+      let cabecalhoCusto = '';
+      if (moedaAtual === 'USD') {
+        cabecalhoCusto = `💵 *Custo Base:* US$ ${custoNum.toFixed(2)} (Câmbio R$ ${cot.toFixed(2)}) ➔ *R$ ${custoFinalBRL.toFixed(2)}*`;
+      } else {
+        cabecalhoCusto = `💵 *Custo Base:* R$ ${custoFinalBRL.toFixed(2)}`;
+      }
+
+      const msg = `*🤖 SMART MELI ULTRA | ANÁLISE DE VIABILIDADE*
+
+` +
+                  `📦 *Ativo:* ${r.titulo_encontrado || r.titulo || 'Produto'}
+` +
+                  `🎯 *Preço Alvo ML:* R$ ${preco.toFixed(2)}
+` +
+                  `🔥 *Giro de Vendas:* ${tagGiro} (${vendasTexto})
+` +
+                  `${cabecalhoCusto}
+
+` +
+                  `━━━━━━━━━━━━━━━━━━━━━━
+` +
+                  `⚡ *MERCADO LIVRE CLÁSSICO (11.5%)*
+` +
+                  `• Preço Venda: R$ ${preco.toFixed(2)}
+` +
+                  `• (-) Custo Mercadoria: R$ ${custoFinalBRL.toFixed(2)}
+` +
+                  `• (-) Tarifa ML (11.5%): R$ ${taxaC.toFixed(2)}
+` +
+                  (outrosC > 0 ? `• (-) Frete / Custos Operacionais: R$ ${outrosC.toFixed(2)}
+` : '') +
+                  `• (=) *Lucro Líquido: R$ ${lucroC.toFixed(2)}*
+` +
+                  `• 📊 *Margem Líquida: ${margemC.toFixed(1)}%*
+
+` +
+                  `━━━━━━━━━━━━━━━━━━━━━━
+` +
+                  `💎 *MERCADO LIVRE PREMIUM (16.5% - 12x Sem Juros)*
+` +
+                  `• Preço Venda: R$ ${preco.toFixed(2)}
+` +
+                  `• (-) Custo Mercadoria: R$ ${custoFinalBRL.toFixed(2)}
+` +
+                  `• (-) Tarifa ML (16.5%): R$ ${taxaP.toFixed(2)}
+` +
+                  (outrosP > 0 ? `• (-) Frete / Custos Operacionais: R$ ${outrosP.toFixed(2)}
+` : '') +
+                  `• (=) *Lucro Líquido: R$ ${lucroP.toFixed(2)}*
+` +
+                  `• 📊 *Margem Líquida: ${margemP.toFixed(1)}%*
+
+` +
+                  `━━━━━━━━━━━━━━━━━━━━━━
+` +
+                  `🚦 *Veredito Radar:*
+${statusRadar}
+
+` +
+                  `🔗 *Link do Concorrente:* ${r.link || 'N/A'}
+
+` +
+                  `_Auditado via Smart Meli Ultra Core_`;
+
+      const url = 'https://api.whatsapp.com/send?text=' + encodeURIComponent(msg);
       window.open(url, '_blank');
     }
 </script>
