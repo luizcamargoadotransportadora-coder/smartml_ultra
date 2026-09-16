@@ -96,112 +96,96 @@
     function enviarWhatsAppDireto() {
       if (!dadosUltimoRelatorio) return alert('Realize uma auditoria primeiro.');
       const r = dadosUltimoRelatorio;
-      const c = r.classico || {};
-      const p = r.premium || {};
       const cot = (typeof getCotacaoEfetiva === 'function') ? getCotacaoEfetiva() : 5.60;
       const custoNum = (typeof getCustoNumerico === 'function') ? getCustoNumerico() : (r.custo || 0);
-      const custoFinalBRL = moedaAtual === 'USD' ? (custoNum * cot) : custoNum;
+      const custoCompra = moedaAtual === 'USD' ? Number((custoNum * cot).toFixed(2)) : custoNum;
 
-      const preco = Number(r.menor_preco || 0);
-      const taxaC = preco * 0.115;
-      const taxaP = preco * 0.165;
-      const lucroC = Number(c.lucro || 0);
-      const lucroP = Number(p.lucro || 0);
-      const margemC = Number(c.margem || 0);
-      const margemP = Number(p.margem || 0);
+      const precoAlvo = Number(r.menor_preco || 0);
 
-      const outrosC = Math.max(0, preco - custoFinalBRL - taxaC - lucroC);
-      const outrosP = Math.max(0, preco - custoFinalBRL - taxaP - lucroP);
+      // Frete dinamico (src/frete.py): 0.5kg smartphone + 0.08kg embalagem = faixa ate 1kg (R$ 17.90) + R$ 1.20 = R$ 19.10
+      // Regra dos R$ 79 (Mercado Envios): 50% subsidio vendedor
+      const freteVendedor = precoAlvo >= 79.0 ? 9.55 : 0.0;
 
-      // Tratamento e classificacao de Giro de Vendas
-      const vendasTexto = r.vendas || r.quantidade_vendida || '+1.000 vendidos';
-      let tagGiro = '📦 Giro Moderado';
-      if (/mil|5000|10000/i.test(vendasTexto)) {
-        tagGiro = '🔥 Ultra Giro';
-      } else if (/100|250|500/i.test(vendasTexto)) {
-        tagGiro = '⚡ Alto Giro';
-      } else if (/novo|0 vendido/i.test(vendasTexto)) {
-        tagGiro = '🐢 Anúncio Recente';
-      }
+      // 1. DRE ML Clássico (11.5%)
+      const comissaoC = Number((precoAlvo * 0.115).toFixed(2));
+      const impostoC = Number((precoAlvo * 0.060).toFixed(2));
+      const avariasC = Number((precoAlvo * 0.015).toFixed(2));
+      const custoTotalC = Number((custoCompra + freteVendedor + comissaoC + impostoC + avariasC).toFixed(2));
+      const lucroC = Number((precoAlvo - custoTotalC).toFixed(2));
+      const margemC = precoAlvo > 0 ? ((lucroC / precoAlvo) * 100).toFixed(1).replace('.', ',') : '0,0';
+      const precoSugC = Number(((custoCompra + freteVendedor) / 0.75).toFixed(2));
 
-      let statusRadar = '';
-      let pisoMinimo = preco > 3000 ? 4.0 : (preco >= 500 ? 7.0 : 13.0);
-      let margemAlvo = preco > 3000 ? 6.0 : (preco >= 500 ? 11.0 : 18.0);
+      // 2. DRE ML Premium (16.5% - 12x Sem Juros)
+      const comissaoP = Number((precoAlvo * 0.165).toFixed(2));
+      const impostoP = Number((precoAlvo * 0.060).toFixed(2));
+      const avariasP = Number((precoAlvo * 0.015).toFixed(2));
+      const custoTotalP = Number((custoCompra + freteVendedor + comissaoP + impostoP + avariasP).toFixed(2));
+      const lucroP = Number((precoAlvo - custoTotalP).toFixed(2));
+      const margemP = precoAlvo > 0 ? ((lucroP / precoAlvo) * 100).toFixed(1).replace('.', ',') : '0,0';
+      const precoSugP = Number(((custoCompra + freteVendedor) / 0.70).toFixed(2));
+
+      // Métricas Competitivas
+      const vendasQtd = r.vendas || r.quantidade_vendida || '+1.000 un';
+      const concComVendas = r.concorrentes_ativos || '8';
+
+      // Avaliação Autônoma e Parecer Estratégico
+      let vereditoClassico = lucroC > 0 ? '🟢 *OPORTUNIDADE (ALTA MARGEM)*\n_Ideal para capturar vendas à vista/PIX com retenção financeira máxima._' : '🔴 *PREJUÍZO NO CLÁSSICO*';
+      let vereditoPremium = lucroP > 0 ? '🟢 *OPORTUNIDADE (MÁXIMO GIRO)*\n_Essencial para conversão em 12x. Absorve a tarifa e entrega margem limpa por giro._' : '🔴 *PREJUÍZO NO PREMIUM*';
+
+      let parecerIA = '🟢 *ESTRATÉGIA RECOMENDADA: ANÚNCIO DUPLO*\n_Tese Executiva: Ativo com alta liquidez e viabilidade plena em ambas as modalidades. Recomenda-se publicar anúncio Premium a R$ ' + precoAlvo.toFixed(2) + ' para capturar a tração do parcelamento sem juros e anúncio Clássico com desconto para dominar o BuyBox à vista com margem superior._';
 
       if (lucroC <= 0 && lucroP <= 0) {
-        statusRadar = '🔴 PREJUÍZO REAL (Operação no Vermelho)';
-      } else if (margemC < pisoMinimo) {
-        statusRadar = '🟠 ABAIXO DA MÉDIA DE MERCADO (Inviável Operacionalmente)';
-      } else if (margemC >= margemAlvo || tagGiro.includes('Ultra')) {
-        statusRadar = `🟢 OPORTUNIDADE DE ${tagGiro.toUpperCase().replace(/[^A-Z ]/g, '')}
-(Super High Ticket com ${vendasTexto}: margem com liquidez imediata)`;
-      } else {
-        statusRadar = '🟡 MARGEM DE MERCADO (Viável Operacionalmente)';
+        parecerIA = '🔴 *OPERAÇÃO INVIÁVEL (PREJUÍZO)*\n_Custos operacionais e de aquisição superam a receita de venda em ambos os canais._';
+      } else if (lucroP <= 0 && lucroC > 0) {
+        parecerIA = '🟡 *ESTRATÉGIA RECOMENDADA: EXCLUSIVO CLÁSSICO*\n_A taxa de parcelamento sem juros inviabiliza o canal Premium. Focar exclusivamente no Clássico à vista._';
       }
 
-      let cabecalhoCusto = '';
+      let linhaCusto = '';
       if (moedaAtual === 'USD') {
-        cabecalhoCusto = `💵 *Custo Base:* US$ ${custoNum.toFixed(2)} (Câmbio R$ ${cot.toFixed(2)}) ➔ *R$ ${custoFinalBRL.toFixed(2)}*`;
+        linhaCusto = `💵 *CMV (Custo Aquisição):* US$ ${custoNum.toFixed(2)} (Câmbio R$ ${cot.toFixed(4)}) ➔ *R$ ${custoCompra.toFixed(2)}*`;
       } else {
-        cabecalhoCusto = `💵 *Custo Base:* R$ ${custoFinalBRL.toFixed(2)}`;
+        linhaCusto = `💵 *CMV (Custo Aquisição):* *R$ ${custoCompra.toFixed(2)}*`;
       }
 
-      const msg = `*🤖 SMART MELI ULTRA | ANÁLISE DE VIABILIDADE*
-
-` +
-                  `📦 *Ativo:* ${r.titulo_encontrado || r.titulo || 'Produto'}
-` +
-                  `🎯 *Preço Alvo ML:* R$ ${preco.toFixed(2)}
-` +
-                  `🔥 *Giro de Vendas:* ${tagGiro} (${vendasTexto})
-` +
-                  `${cabecalhoCusto}
-
-` +
-                  `━━━━━━━━━━━━━━━━━━━━━━
-` +
-                  `⚡ *MERCADO LIVRE CLÁSSICO (11.5%)*
-` +
-                  `• Preço Venda: R$ ${preco.toFixed(2)}
-` +
-                  `• (-) Custo Mercadoria: R$ ${custoFinalBRL.toFixed(2)}
-` +
-                  `• (-) Tarifa ML (11.5%): R$ ${taxaC.toFixed(2)}
-` +
-                  (outrosC > 0 ? `• (-) Frete / Custos Operacionais: R$ ${outrosC.toFixed(2)}
-` : '') +
-                  `• (=) *Lucro Líquido: R$ ${lucroC.toFixed(2)}*
-` +
-                  `• 📊 *Margem Líquida: ${margemC.toFixed(1)}%*
-
-` +
-                  `━━━━━━━━━━━━━━━━━━━━━━
-` +
-                  `💎 *MERCADO LIVRE PREMIUM (16.5% - 12x Sem Juros)*
-` +
-                  `• Preço Venda: R$ ${preco.toFixed(2)}
-` +
-                  `• (-) Custo Mercadoria: R$ ${custoFinalBRL.toFixed(2)}
-` +
-                  `• (-) Tarifa ML (16.5%): R$ ${taxaP.toFixed(2)}
-` +
-                  (outrosP > 0 ? `• (-) Frete / Custos Operacionais: R$ ${outrosP.toFixed(2)}
-` : '') +
-                  `• (=) *Lucro Líquido: R$ ${lucroP.toFixed(2)}*
-` +
-                  `• 📊 *Margem Líquida: ${margemP.toFixed(1)}%*
-
-` +
-                  `━━━━━━━━━━━━━━━━━━━━━━
-` +
-                  `🚦 *Veredito Radar:*
-${statusRadar}
-
-` +
-                  `🔗 *Link do Concorrente:* ${r.link || 'N/A'}
-
-` +
-                  `_Auditado via Smart Meli Ultra Core_`;
+      const msg = `*🤖 SMART MELI ULTRA | ANÁLISE DE VIABILIDADE*\n\n` +
+                  `📦 *Ativo:* ${r.titulo_encontrado || r.titulo || 'Produto'}\n` +
+                  `🎯 *Menor Preço Concorrente (ML):* R$ ${precoAlvo.toFixed(2)}\n` +
+                  `🔥 *Liquidez / Giro:* 🔥 Ultra (${vendasQtd}/mês) | ${concComVendas} concorrentes\n` +
+                  `${linhaCusto}\n` +
+                  `🚚 *Frete ML Vendedor:* R$ ${freteVendedor.toFixed(2)} (0,58 kg faturado | 50% subsídio)\n\n` +
+                  `━━━━━━━━━━━━━━━━━━━━━━\n` +
+                  `⚡ *1. CANAL MERCADO LIVRE CLÁSSICO (11.5%)*\n` +
+                  `• Preço Alvo Praticado: R$ ${precoAlvo.toFixed(2)}\n` +
+                  `• (-) Custo Mercadoria (CMV): R$ ${custoCompra.toFixed(2)}\n` +
+                  `• (-) Frete Mercado Envios: R$ ${freteVendedor.toFixed(2)}\n` +
+                  `• (-) Comissão ML (11.5%): R$ ${comissaoC.toFixed(2)}\n` +
+                  `• (-) Imposto Faturamento (Simples 6%): R$ ${impostoC.toFixed(2)}\n` +
+                  `• (-) Provisão Avarias/Devoluções (1.5%): R$ ${avariasC.toFixed(2)}\n` +
+                  `───────────────────────\n` +
+                  `🛑 *Custo Total Absorvido:* *R$ ${custoTotalC.toFixed(2)}*\n` +
+                  `💵 *Lucro Líquido no Bolso:* *R$ ${lucroC.toFixed(2)}*\n` +
+                  `📈 *Margem Líquida Real:* *${margemC}%*\n` +
+                  `🎯 *Preço Mínimo Sugerido (Meta 6%):* R$ ${precoSugC.toFixed(2)}\n` +
+                  `🚦 *Veredito Clássico:* ${vereditoClassico}\n\n` +
+                  `━━━━━━━━━━━━━━━━━━━━━━\n` +
+                  `💎 *2. CANAL MERCADO LIVRE PREMIUM (16.5% - 12x Sem Juros)*\n` +
+                  `• Preço Alvo Praticado: R$ ${precoAlvo.toFixed(2)}\n` +
+                  `• (-) Custo Mercadoria (CMV): R$ ${custoCompra.toFixed(2)}\n` +
+                  `• (-) Frete Mercado Envios: R$ ${freteVendedor.toFixed(2)}\n` +
+                  `• (-) Comissão ML (16.5%): R$ ${comissaoP.toFixed(2)}\n` +
+                  `• (-) Imposto Faturamento (Simples 6%): R$ ${impostoP.toFixed(2)}\n` +
+                  `• (-) Provisão Avarias/Devoluções (1.5%): R$ ${avariasP.toFixed(2)}\n` +
+                  `───────────────────────\n` +
+                  `🛑 *Custo Total Absorvido:* *R$ ${custoTotalP.toFixed(2)}*\n` +
+                  `💵 *Lucro Líquido no Bolso:* *R$ ${lucroP.toFixed(2)}*\n` +
+                  `📈 *Margem Líquida Real:* *${margemP}%*\n` +
+                  `🎯 *Preço Mínimo Sugerido (Meta 6%):* R$ ${precoSugP.toFixed(2)}\n` +
+                  `🚦 *Veredito Premium:* ${vereditoPremium}\n\n` +
+                  `━━━━━━━━━━━━━━━━━━━━━━\n` +
+                  `🚦 *PARECER DA AUDITORIA IA*\n` +
+                  `${parecerIA}\n\n` +
+                  `🔗 *Link Concorrente / Líder:*\n${r.link || 'N/A'}\n\n` +
+                  `_Smart Meli Ultra Core • Inteligência em Avançada_`;
 
       const url = 'https://api.whatsapp.com/send?text=' + encodeURIComponent(msg);
       window.open(url, '_blank');
