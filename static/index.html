@@ -7,37 +7,6 @@
   <script src="https://unpkg.com/html5-qrcode"></script>
   <script>
 
-    let cotacaoAutoUSD = 5.60;
-
-    async function carregarCotacaoUSD() {
-      try {
-        const r = await fetch('https://economia.awesomeapi.com.br/last/USD-BRL');
-        const d = await r.json();
-        if (d && d.USDBRL && d.USDBRL.bid) {
-          cotacaoAutoUSD = parseFloat(d.USDBRL.bid);
-          const inCot = document.getElementById('inCotacaoUSD');
-          if (inCot && !inCot.value) {
-            inCot.placeholder = cotacaoAutoUSD.toFixed(2);
-          }
-          if (typeof atualizarConversao === 'function') atualizarConversao();
-        }
-      } catch (e) {
-        console.log('Falha ao consultar API de câmbio, usando fallback:', cotacaoAutoUSD);
-      }
-    }
-
-    function getCotacaoEfetiva() {
-      const el = document.getElementById('inCotacaoUSD');
-      if (el && el.value) {
-        const manual = parseFloat(el.value.replace(',', '.'));
-        if (!isNaN(manual) && manual > 0) return manual;
-      }
-      return cotacaoAutoUSD;
-    }
-
-    carregarCotacaoUSD();
-
-
     function formatarMoeda(el) {
       let v = el.value.replace(/\D/g, '');
       if (!v) { el.value = ''; return; }
@@ -55,7 +24,50 @@
     }
 
     let moedaAtual = 'BRL';
-    const getCotacaoEfetiva() = 5.60;
+    
+    let cotacaoAutoUSD = 5.60;
+
+    async function carregarCotacaoUSD() {
+      try {
+        const r = await fetch('https://economia.awesomeapi.com.br/last/USD-BRL');
+        const d = await r.json();
+        if (d && d.USDBRL && d.USDBRL.bid) {
+          cotacaoAutoUSD = parseFloat(d.USDBRL.bid);
+          const inCot = document.getElementById('inCotacaoUSD');
+          if (inCot && !inCot.value) inCot.placeholder = cotacaoAutoUSD.toFixed(2);
+          if (typeof atualizarConversao === 'function') atualizarConversao();
+        }
+      } catch (e) {
+        console.log('Falha na API de cambio, usando fallback:', cotacaoAutoUSD);
+      }
+    }
+    carregarCotacaoUSD();
+
+    function getCotacaoEfetiva() {
+      const el = document.getElementById('inCotacaoUSD');
+      if (el && el.value) {
+        const m = parseFloat(el.value.replace(',', '.'));
+        if (!isNaN(m) && m > 0) return m;
+      }
+      return cotacaoAutoUSD;
+    }
+
+    function formatarMoeda(el) {
+      let v = el.value.replace(/\D/g, '');
+      if (!v) { el.value = ''; return; }
+      let num = (parseInt(v, 10) / 100).toFixed(2);
+      let p = num.split('.');
+      p[0] = p[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+      el.value = p.join(',');
+    }
+
+    function getCustoNumerico() {
+      const el = document.getElementById('inCusto');
+      if (!el || !el.value) return 0;
+      let v = el.value.replace(/\./g, '').replace(',', '.').replace(/[^\d.]/g, '');
+      return parseFloat(v) || 0;
+    }
+
     let dadosUltimoRelatorio = null;
 
     function setMoeda(m) {
@@ -63,29 +75,26 @@
       document.getElementById('btnBRL').classList.toggle('active', m === 'BRL');
       document.getElementById('btnUSD').classList.toggle('active', m === 'USD');
       document.getElementById('lblCusto').innerText = m === 'BRL' ? 'CUSTO (R$)' : 'CUSTO (US$)';
-      document.getElementById('inCusto').placeholder = m === 'BRL' ? '0,00' : '0.00';
-      const boxCot = document.getElementById('boxCotacaoUSD');
-      if (boxCot) boxCot.style.display = m === 'USD' ? 'flex' : 'none';
+      document.getElementById('inCusto').placeholder = '0,00';
+      const box = document.getElementById('boxCotacaoUSD');
+      if (box) box.style.display = m === 'USD' ? 'flex' : 'none';
       atualizarConversao();
     }
 
     function atualizarConversao() {
       const val = getCustoNumerico();
       const prev = document.getElementById('previewConversao');
-      if (moedaAtual === 'USD' && !isNaN(val) && val > 0) {
-        const brl = (val * getCotacaoEfetiva()).toFixed(2);
-        prev.innerText = '≈ R$ ' + brl + ' (Câmbio: US$ 1 = R$ ' + getCotacaoEfetiva().toFixed(2) + ')';
+      const cot = getCotacaoEfetiva();
+      if (moedaAtual === 'USD' && val > 0) {
         prev.style.display = 'block';
+        prev.innerText = `≈ R$ ${(val * cot).toFixed(2)} (Câmbio: US$ 1 = R$ ${cot.toFixed(2)})`;
       } else {
         prev.style.display = 'none';
       }
     }
 
     function enviarWhatsAppDireto() {
-      if (!dossieWhats) {
-        alert('Realize uma auditoria primeiro.');
-        return;
-      }
+      if (!dossieWhats) return alert('Realize uma auditoria primeiro.');
       const url = 'https://api.whatsapp.com/send?text=' + encodeURIComponent(dossieWhats);
       window.open(url, '_blank');
     }
@@ -366,10 +375,10 @@
       <div style="margin-bottom: 4px;">
         <input id="inCusto" type="text" inputmode="numeric" placeholder="0,00" oninput="formatarMoeda(this); atualizarConversao()">
       </div>
-        <div id="boxCotacaoUSD" style="display: none; align-items: center; gap: 6px; font-size: 11px; margin-top: 5px; color: #94a3b8;">
-          <span>Cotação USD: R$</span>
-          <input id="inCotacaoUSD" type="number" step="0.01" style="width: 70px; padding: 3px 6px; font-size: 11px; border-radius: 4px; background: #0f172a; color: #00FF88; border: 1px solid #334155; font-weight: bold;" placeholder="Auto" oninput="atualizarConversao()">
-          <span style="font-size: 10px; color: #64748b;">(Vazio = Cotação Automática)</span>
+        <div id="boxCotacaoUSD" style="display: none; align-items: center; justify-content: space-between; font-size: 11px; margin-top: 6px; margin-bottom: 6px; background: rgba(255,255,255,0.04); padding: 6px 10px; border-radius: 6px; border: 1px solid #334155;">
+          <span style="color: #94a3b8;">Cotação US$: R$</span>
+          <input id="inCotacaoUSD" type="number" step="0.01" style="width: 75px; text-align: center; padding: 2px 4px; font-size: 11px; border-radius: 4px; background: #0f172a; color: #00FF88; border: 1px solid #3b82f6; font-weight: bold;" placeholder="Auto" oninput="atualizarConversao()">
+          <span style="color: #64748b; font-size: 10px;">(Vazio = Oficial)</span>
         </div>
       <div id="previewConversao" style="display: none; font-size: 11px; color: #FFE600; font-weight: 700; margin-bottom: 8px;"></div>
 
