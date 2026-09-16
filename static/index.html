@@ -94,167 +94,8 @@
     }
 
     function enviarWhatsAppDireto() {
-      if (!dadosUltimoRelatorio) {
-        alert('Realize uma auditoria primeiro.');
-        return;
-      }
-      const r = dadosUltimoRelatorio;
-      const cot = (typeof getCotacaoEfetiva === 'function') ? getCotacaoEfetiva() : 5.1529;
-      const custoNum = (typeof getCustoNumerico === 'function') ? getCustoNumerico() : (r.custo || 0);
-      const custoCompra = moedaAtual === 'USD' ? Number((custoNum * cot).toFixed(2)) : custoNum;
-
-      const precoAlvo = Number(r.menor_preco || 0);
-      const freteVendedor = precoAlvo >= 79.0 ? 9.55 : 0.0;
-
-      // Demonstrativo ML Classico (11.5%)
-      const comissaoC = Number((precoAlvo * 0.115).toFixed(2));
-      const impostoC = Number((precoAlvo * 0.060).toFixed(2));
-      const avariasC = Number((precoAlvo * 0.015).toFixed(2));
-      const custoTotalC = Number((custoCompra + freteVendedor + comissaoC + impostoC + avariasC).toFixed(2));
-      const lucroC = Number((precoAlvo - custoTotalC).toFixed(2));
-      const margemC = precoAlvo > 0 ? ((lucroC / precoAlvo) * 100).toFixed(1).replace('.', ',') : '0,0';
-      const precoSugC = Number(((custoCompra + freteVendedor) / 0.75).toFixed(2));
-
-      // Demonstrativo ML Premium (16.5% - 12x Sem Juros)
-      const comissaoP = Number((precoAlvo * 0.165).toFixed(2));
-      const impostoP = Number((precoAlvo * 0.060).toFixed(2));
-      const avariasP = Number((precoAlvo * 0.015).toFixed(2));
-      const custoTotalP = Number((custoCompra + freteVendedor + comissaoP + impostoP + avariasP).toFixed(2));
-      const lucroP = Number((precoAlvo - custoTotalP).toFixed(2));
-      const margemP = precoAlvo > 0 ? ((lucroP / precoAlvo) * 100).toFixed(1).replace('.', ',') : '0,0';
-      const precoSugP = Number(((custoCompra + freteVendedor) / 0.70).toFixed(2));
-
-      const agora = new Date();
-      const dataStr = agora.toLocaleDateString('pt-BR');
-      const horaStr = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-      const vendasQtd = r.vendas || r.quantidade_vendida || '+1.000 un';
-
-      let linhaCusto = '';
-      if (moedaAtual === 'USD') {
-        linhaCusto = 'Custo de Aquisicao (CMV): US$ ' + custoNum.toFixed(2) + ' (Cambio R$ ' + cot.toFixed(4) + ') -> R$ ' + custoCompra.toFixed(2);
-      } else {
-        linhaCusto = 'Custo de Aquisicao (CMV): R$ ' + custoCompra.toFixed(2);
-      }
-
-      let parecerTexto = 'Veredito: OPORTUNIDADE DE ALTA PERFORMANCE
-' +
-                         'Estrategia: ANUNCIO DUPLO (RECOMENDADO)
-' +
-                         'Fundamentacao: Margens liquidas de ' + margemP + '% a ' + margemC + '% superam a media historica do nicho (padrao 5% a 8%). Risco de estoque nulo. Recomenda-se publicar anuncio Premium a R$ ' + precoAlvo.toFixed(2) + ' para tracionar o parcelamento sem juros e anuncio Classico com desconto a vista para dominar o BuyBox com margem superior.';
-
-      if (lucroC <= 0 && lucroP <= 0) {
-        parecerTexto = 'Veredito: REPROVADO (PREJUIZO OPERACIONAL)
-' +
-                       'Estrategia: NAO ADQUIRIR
-' +
-                       'Fundamentacao: Custos de aquisicao e tarifas superam a receita de venda nos precos atuais de mercado.';
-      } else if (lucroP <= 0) {
-        parecerTexto = 'Veredito: RESTRITO AO CANAL CLASSICO
-' +
-                       'Estrategia: EXCLUSIVO A VISTA
-' +
-                       'Fundamentacao: O parcelamento 12x sem juros corroi a rentabilidade. Operar unicamente no ML Classico a vista.';
-      }
-
-      const msg = '*SMART MELI ULTRA | ANÁLISE DE VIABILIDADE*
-' +
-                  'EXTRATO DE AUDITORIA CONTÁBIL E PRECIFICACAO
-' +
-                  'Emissao: ' + dataStr + ' as ' + horaStr + '
-
-' +
-                  'DADOS DO ATIVO
-' +
-                  'Produto: ' + (r.titulo_encontrado || r.titulo || 'Produto') + '
-' +
-                  'Menor Preco Mercado Livre: R$ ' + precoAlvo.toFixed(2) + '
-' +
-                  'Liquidez / Volume: Alto Giro (' + vendasQtd + '/mes | 8 concorrentes)
-' +
-                  linhaCusto + '
-' +
-                  'Frete Mercado Envios: R$ ' + freteVendedor.toFixed(2) + ' (0,58 kg faturado | Subsidio 50%)
-
-' +
-                  '========================================
-' +
-                  '1. DEMONSTRATIVO - ML CLASSICO (11,5%)
-' +
-                  '========================================
-' +
-                  '(+) Preco de Venda:                R$ ' + precoAlvo.toFixed(2) + '
-' +
-                  '(-) Custo de Aquisicao (CMV):      R$ ' + custoCompra.toFixed(2) + '
-' +
-                  '(-) Frete Mercado Envios:          R$     ' + freteVendedor.toFixed(2) + '
-' +
-                  '(-) Comissao ML (11,5%):           R$   ' + comissaoC.toFixed(2) + '
-' +
-                  '(-) Imposto Faturamento (6,0%):    R$   ' + impostoC.toFixed(2) + '
-' +
-                  '(-) Provisao Avarias (1,5%):       R$   ' + avariasC.toFixed(2) + '
-' +
-                  '----------------------------------------
-' +
-                  '(=) Custo Total Absorvido:         R$ ' + custoTotalC.toFixed(2) + '
-' +
-                  '(=) LUCRO LIQUIDO REAL:            R$ ' + lucroC.toFixed(2) + '
-' +
-                  '(=) MARGEM LIQUIDA REAL:           ' + margemC + '%
-' +
-                  'Preco Minimo Sugerido (Meta 6%):   R$ ' + precoSugC.toFixed(2) + '
-' +
-                  'Veredito Canal:                    ' + (lucroC > 0 ? 'OPORTUNIDADE (ALTA MARGEM)' : 'PREJUIZO') + '
-
-' +
-                  '========================================
-' +
-                  '2. DEMONSTRATIVO - ML PREMIUM (16,5% - 12x)
-' +
-                  '========================================
-' +
-                  '(+) Preco de Venda:                R$ ' + precoAlvo.toFixed(2) + '
-' +
-                  '(-) Custo de Aquisicao (CMV):      R$ ' + custoCompra.toFixed(2) + '
-' +
-                  '(-) Frete Mercado Envios:          R$     ' + freteVendedor.toFixed(2) + '
-' +
-                  '(-) Comissao ML (16,5%):           R$ ' + comissaoP.toFixed(2) + '
-' +
-                  '(-) Imposto Faturamento (6,0%):    R$   ' + impostoP.toFixed(2) + '
-' +
-                  '(-) Provisao Avarias (1,5%):       R$   ' + avariasP.toFixed(2) + '
-' +
-                  '----------------------------------------
-' +
-                  '(=) Custo Total Absorvido:         R$ ' + custoTotalP.toFixed(2) + '
-' +
-                  '(=) LUCRO LIQUIDO REAL:            R$ ' + lucroP.toFixed(2) + '
-' +
-                  '(=) MARGEM LIQUIDA REAL:           ' + margemP + '%
-' +
-                  'Preco Minimo Sugerido (Meta 6%):   R$ ' + precoSugP.toFixed(2) + '
-' +
-                  'Veredito Canal:                    ' + (lucroP > 0 ? 'OPORTUNIDADE (ALTO GIRO)' : 'PREJUIZO') + '
-
-' +
-                  '========================================
-' +
-                  'PARECER DA AUDITORIA IA
-' +
-                  '========================================
-' +
-                  parecerTexto + '
-
-' +
-                  'Link Concorrente / Lider:
-' +
-                  (r.link || 'N/A') + '
-
-' +
-                  '_Smart Meli Ultra • Inteligência em Avançada_';
-
-      const url = 'https://api.whatsapp.com/send?text=' + encodeURIComponent(msg);
+      if (!dossieWhats) return alert('Realize uma auditoria primeiro.');
+      const url = 'https://api.whatsapp.com/send?text=' + encodeURIComponent(dossieWhats);
       window.open(url, '_blank');
     }
 </script>
@@ -753,34 +594,30 @@
           }
 
           hud.className = 'hud-panel status-' + res.status;
-          const pVal = Number(res.menor_preco || 0);
-          const cLucro = Number(c.lucro || 0);
-          const pLucro = Number(p.lucro || 0);
-          const cMarg = Number(c.margem || 0);
-          const pMarg = Number(p.margem || 0);
-          const piso = pVal > 3000 ? 3.0 : (pVal >= 500 ? 6.0 : 12.0);
-          const alvo = pVal > 3000 ? 6.0 : (pVal >= 500 ? 9.0 : 15.0);
+          stBadge.innerText = res.status === 'A' ? '🟢 OPORTUNIDADE' : (res.status === 'E' ? '🔴 PREJUÍZO' : '🟡 MARGEM CRÍTICA');
+          stBadge.style.background = res.status === 'A' ? 'rgba(0,255,136,0.15)' : (res.status === 'E' ? 'rgba(239,68,68,0.15)' : 'rgba(255,230,0,0.15)');
+          stBadge.style.color = res.status === 'A' ? '#00FF88' : (res.status === 'E' ? '#ef4444' : '#FFE600');
 
-          if (cLucro <= 0 && pLucro <= 0) {
-            stBadge.innerText = 'PREJUÍZO';
-            stBadge.style.color = '#ef4444';
-            stBadge.style.background = 'rgba(239,68,68,0.15)';
-          } else if (cMarg < piso && pMarg < piso) {
-            stBadge.innerText = 'ABAIXO DA MÉDIA';
-            stBadge.style.color = '#f97316';
-            stBadge.style.background = 'rgba(249,115,22,0.15)';
-          } else if (cMarg >= alvo || pMarg >= alvo || cLucro >= 150) {
-            stBadge.innerText = 'OPORTUNIDADE';
-            stBadge.style.color = '#00FF88';
-            stBadge.style.background = 'rgba(0,255,136,0.15)';
-          } else {
-            stBadge.innerText = 'MARGEM DE MERCADO';
-            stBadge.style.color = '#FFE600';
-            stBadge.style.background = 'rgba(255,230,0,0.15)';
-          }
+          document.getElementById('hudTitulo').innerText = res.titulo_encontrado || res.titulo;
+          document.getElementById('hudPreco').innerText = 'R$ ' + res.menor_preco.toFixed(2);
+          document.getElementById('hudImg').src = res.imagem || 'https://http2.mlstatic.com/frontend-assets/ui-navigation/5.18.9/mercadolibre/logo__small.png';
 
-          document.getElementById('hudMargemC').style.color = (cMarg >= alvo || cLucro >= 150) ? '#00FF88' : (cMarg > 0 ? '#FFE600' : '#ef4444');
-          document.getElementById('hudMargemP').style.color = (pMarg >= alvo || pLucro >= 150) ? '#00FF88' : (pMarg > 0 ? '#FFE600' : '#ef4444');
+          const lk = document.getElementById('hudLink');
+          if (res.link) { lk.href = res.link; lk.style.display = 'inline-block'; } else { lk.style.display = 'none'; }
+
+          // Classico
+          const c = res.classico;
+          document.getElementById('hudLucroC').innerText = 'R$ ' + c.lucro.toFixed(2);
+          document.getElementById('hudLucroC').style.color = c.lucro >= 0 ? '#00FF88' : '#ef4444';
+          document.getElementById('hudMargemC').innerText = 'Margem: ' + c.margem.toFixed(1) + '%';
+          document.getElementById('hudMargemC').style.color = c.margem >= 15 ? '#00FF88' : (c.margem > 0 ? '#FFE600' : '#ef4444');
+
+          // Premium
+          const p = res.premium;
+          document.getElementById('hudLucroP').innerText = 'R$ ' + p.lucro.toFixed(2);
+          document.getElementById('hudLucroP').style.color = p.lucro >= 0 ? '#FFE600' : '#ef4444';
+          document.getElementById('hudMargemP').innerText = 'Margem: ' + p.margem.toFixed(1) + '%';
+          document.getElementById('hudMargemP').style.color = p.margem >= 15 ? '#00FF88' : (p.margem > 0 ? '#FFE600' : '#ef4444');
 
           dossieWhats = `*🤖 SMART MELI ULTRA | AUDITORIA*
 
