@@ -594,14 +594,14 @@
           document.getElementById('hudLucroC').innerText = 'R$ ' + c.lucro.toFixed(2);
           document.getElementById('hudLucroC').style.color = c.lucro >= 0 ? '#00FF88' : '#ef4444';
           document.getElementById('hudMargemC').innerText = 'Margem: ' + c.margem.toFixed(1) + '%';
-          document.getElementById('hudMargemC').style.color = (c.margem >= 6.0 || c.lucro >= 150) ? '#00FF88' : (c.margem > 0 ? '#FFE600' : '#ef4444');
+          document.getElementById('hudMargemC').style.color = c.margem >= 15 ? '#00FF88' : (c.margem > 0 ? '#FFE600' : '#ef4444');
 
           // Premium
           const p = res.premium;
           document.getElementById('hudLucroP').innerText = 'R$ ' + p.lucro.toFixed(2);
           document.getElementById('hudLucroP').style.color = p.lucro >= 0 ? '#FFE600' : '#ef4444';
           document.getElementById('hudMargemP').innerText = 'Margem: ' + p.margem.toFixed(1) + '%';
-          document.getElementById('hudMargemP').style.color = (p.margem >= 6.0 || p.lucro >= 150) ? '#00FF88' : (p.margem > 0 ? '#FFE600' : '#ef4444');
+          document.getElementById('hudMargemP').style.color = p.margem >= 15 ? '#00FF88' : (p.margem > 0 ? '#FFE600' : '#ef4444');
 
           dossieWhats = `*🤖 SMART MELI ULTRA | AUDITORIA*
 
