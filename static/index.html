@@ -7,6 +7,37 @@
   <script src="https://unpkg.com/html5-qrcode"></script>
   <script>
 
+    let cotacaoAutoUSD = 5.60;
+
+    async function carregarCotacaoUSD() {
+      try {
+        const r = await fetch('https://economia.awesomeapi.com.br/last/USD-BRL');
+        const d = await r.json();
+        if (d && d.USDBRL && d.USDBRL.bid) {
+          cotacaoAutoUSD = parseFloat(d.USDBRL.bid);
+          const inCot = document.getElementById('inCotacaoUSD');
+          if (inCot && !inCot.value) {
+            inCot.placeholder = cotacaoAutoUSD.toFixed(2);
+          }
+          if (typeof atualizarConversao === 'function') atualizarConversao();
+        }
+      } catch (e) {
+        console.log('Falha ao consultar API de câmbio, usando fallback:', cotacaoAutoUSD);
+      }
+    }
+
+    function getCotacaoEfetiva() {
+      const el = document.getElementById('inCotacaoUSD');
+      if (el && el.value) {
+        const manual = parseFloat(el.value.replace(',', '.'));
+        if (!isNaN(manual) && manual > 0) return manual;
+      }
+      return cotacaoAutoUSD;
+    }
+
+    carregarCotacaoUSD();
+
+
     function formatarMoeda(el) {
       let v = el.value.replace(/\D/g, '');
       if (!v) { el.value = ''; return; }
@@ -24,7 +55,7 @@
     }
 
     let moedaAtual = 'BRL';
-    const COTACAO_USD = 5.60;
+    const getCotacaoEfetiva() = 5.60;
     let dadosUltimoRelatorio = null;
 
     function setMoeda(m) {
@@ -32,7 +63,9 @@
       document.getElementById('btnBRL').classList.toggle('active', m === 'BRL');
       document.getElementById('btnUSD').classList.toggle('active', m === 'USD');
       document.getElementById('lblCusto').innerText = m === 'BRL' ? 'CUSTO (R$)' : 'CUSTO (US$)';
-      document.getElementById('inCusto').placeholder = m === 'BRL' ? 'Ex: 50,00' : 'Ex: 15.00';
+      document.getElementById('inCusto').placeholder = m === 'BRL' ? '0,00' : '0.00';
+      const boxCot = document.getElementById('boxCotacaoUSD');
+      if (boxCot) boxCot.style.display = m === 'USD' ? 'flex' : 'none';
       atualizarConversao();
     }
 
@@ -40,8 +73,8 @@
       const val = getCustoNumerico();
       const prev = document.getElementById('previewConversao');
       if (moedaAtual === 'USD' && !isNaN(val) && val > 0) {
-        const brl = (val * COTACAO_USD).toFixed(2);
-        prev.innerText = '≈ R$ ' + brl + ' (Câmbio: US$ 1 = R$ ' + COTACAO_USD.toFixed(2) + ')';
+        const brl = (val * getCotacaoEfetiva()).toFixed(2);
+        prev.innerText = '≈ R$ ' + brl + ' (Câmbio: US$ 1 = R$ ' + getCotacaoEfetiva().toFixed(2) + ')';
         prev.style.display = 'block';
       } else {
         prev.style.display = 'none';
@@ -333,6 +366,11 @@
       <div style="margin-bottom: 4px;">
         <input id="inCusto" type="text" inputmode="numeric" placeholder="0,00" oninput="formatarMoeda(this); atualizarConversao()">
       </div>
+        <div id="boxCotacaoUSD" style="display: none; align-items: center; gap: 6px; font-size: 11px; margin-top: 5px; color: #94a3b8;">
+          <span>Cotação USD: R$</span>
+          <input id="inCotacaoUSD" type="number" step="0.01" style="width: 70px; padding: 3px 6px; font-size: 11px; border-radius: 4px; background: #0f172a; color: #00FF88; border: 1px solid #334155; font-weight: bold;" placeholder="Auto" oninput="atualizarConversao()">
+          <span style="font-size: 10px; color: #64748b;">(Vazio = Cotação Automática)</span>
+        </div>
       <div id="previewConversao" style="display: none; font-size: 11px; color: #FFE600; font-weight: 700; margin-bottom: 8px;"></div>
 
       <button class="btn-calc" id="btnAcao" onclick="executarCalculo()">ANALISAR VIABILIDADE ⚡</button>
@@ -518,7 +556,7 @@
         const resp = await fetch('/analisar', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ titulo: prod, custo: custo, moeda: moedaAtual, cotacao: COTACAO_USD })
+          body: JSON.stringify({ titulo: prod, custo: custo, moeda: moedaAtual, cotacao: getCotacaoEfetiva() })
         });
 
         const res = await resp.json();
