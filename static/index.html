@@ -552,8 +552,10 @@
     // 2. AUDITORIA CONTÁBIL
     async function executarCalculo() {
       const prod = document.getElementById('inProd').value.trim();
-      const custo = getCustoNumerico();
-      if (!prod || isNaN(custo) || custo <= 0) return alert('Insira o produto e o custo base.');
+      const custoRaw = getCustoNumerico();
+      if (!prod || isNaN(custoRaw) || custoRaw <= 0) return alert('Insira o produto e o custo base.');
+      const cotacaoEfetiva = (typeof getCotacaoEfetiva === 'function') ? getCotacaoEfetiva() : 5.60;
+      const custo = moedaAtual === 'USD' ? Number((custoRaw * cotacaoEfetiva).toFixed(2)) : custoRaw;
 
       const btn = document.getElementById('btnAcao');
       btn.innerText = 'Buscando Oportunidades... ⚡'; 
