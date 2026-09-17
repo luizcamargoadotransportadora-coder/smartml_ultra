@@ -63,10 +63,16 @@
         return;
       }
 
+      function fmtBRL(v) {
+        return Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
+      function fmtCot(v) {
+        return Number(v || 0).toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 });
+      }
+
       const precoAlvo = Number(r.menor_preco || r.preco || 0);
       const titulo = r.titulo_encontrado || r.titulo || 'Produto Auditado';
 
-      // Limpeza de parâmetros de URL para manter preview e link elegantes
       let linkLimpo = r.link || '';
       if (linkLimpo.includes('?')) linkLimpo = linkLimpo.split('?')[0];
       if (linkLimpo.includes('#')) linkLimpo = linkLimpo.split('#')[0];
@@ -78,65 +84,89 @@
       const custoCompra = isUSD ? Number((custoNum * cot).toFixed(2)) : custoNum;
       const frete = precoAlvo >= 79.0 ? 9.55 : 0.0;
 
-      // ML Clássico
+      // Demonstrativo ML Clássico
       const comissaoC = Number((precoAlvo * 0.115).toFixed(2));
-      const impostosC = Number(((precoAlvo * 0.060) + (precoAlvo * 0.015)).toFixed(2));
-      const taxasTotaisC = Number((frete + comissaoC + impostosC).toFixed(2));
-      const lucroC = Number((precoAlvo - custoCompra - taxasTotaisC).toFixed(2));
+      const impostoC = Number((precoAlvo * 0.060).toFixed(2));
+      const avariasC = Number((precoAlvo * 0.015).toFixed(2));
+      const deducoesC = Number((frete + comissaoC + impostoC + avariasC).toFixed(2));
+      const lucroC = Number((precoAlvo - custoCompra - deducoesC).toFixed(2));
       const margemC = precoAlvo > 0 ? ((lucroC / precoAlvo) * 100).toFixed(1).replace('.', ',') : '0,0';
 
-      // ML Premium
+      // Demonstrativo ML Premium
       const comissaoP = Number((precoAlvo * 0.165).toFixed(2));
-      const impostosP = Number(((precoAlvo * 0.060) + (precoAlvo * 0.015)).toFixed(2));
-      const taxasTotaisP = Number((frete + comissaoP + impostosP).toFixed(2));
-      const lucroP = Number((precoAlvo - custoCompra - taxasTotaisP).toFixed(2));
+      const impostoP = Number((precoAlvo * 0.060).toFixed(2));
+      const avariasP = Number((precoAlvo * 0.015).toFixed(2));
+      const deducoesP = Number((frete + comissaoP + impostoP + avariasP).toFixed(2));
+      const lucroP = Number((precoAlvo - custoCompra - deducoesP).toFixed(2));
       const margemP = precoAlvo > 0 ? ((lucroP / precoAlvo) * 100).toFixed(1).replace('.', ',') : '0,0';
 
       const agora = new Date();
       const dataStr = agora.toLocaleDateString('pt-BR');
       const horaStr = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
-      let linhaCusto = isUSD ? 
-        '• *Custo (CMV):* US$ ' + custoNum.toFixed(2) + ' ➔ *R$ ' + custoCompra.toFixed(2) + '* (Câmbio R$ ' + cot.toFixed(4) + ')' : 
-        '• *Custo (CMV):* *R$ ' + custoCompra.toFixed(2) + '*';
-
-      let diretriz = '';
-      if (lucroC > 0 && lucroP > 0) {
-        diretriz = 'Publicar anúncio Premium a R$ ' + precoAlvo.toFixed(2) + ' para tracionar compras em 12x sem juros e anúncio Clássico com desconto à vista para dominar o BuyBox.';
-      } else if (lucroC > 0 && lucroP <= 0) {
-        diretriz = 'Operar exclusivamente no ML Clássico à vista/PIX. A taxa de parcelamento sem juros de 16,5% inviabiliza a modalidade Premium.';
+      let blocoCusto = '';
+      if (isUSD) {
+        blocoCusto = '*Custo (CMV):* US$ ' + fmtBRL(custoNum) + '\n➔ *R$ ' + fmtBRL(custoCompra) + '* (Câmbio R$ ' + fmtCot(cot) + ')';
       } else {
-        diretriz = 'Produto inviável com as cotações atuais. Custo de compra acima do teto de mercado.';
+        blocoCusto = '*Custo (CMV):* *R$ ' + fmtBRL(custoCompra) + '*';
       }
 
-      // Bloco universal sem caracteres gráficos que quebram no mobile
+      let vereditoClassico = lucroC > 0 ? '*OPORTUNIDADE*' : '*PREJUÍZO*';
+      let vereditoPremium = lucroP > 0 ? '*OPORTUNIDADE*' : '*PREJUÍZO (TAXA 12X)*';
+
+      let parecer = '';
+      if (lucroC > 0 && lucroP > 0) {
+        parecer = 'Anúncio Duplo Recomendado: Publicar anúncio Premium a R$ ' + fmtBRL(precoAlvo) + ' para capturar compras em 12x sem juros e anúncio Clássico com desconto à vista para dominar o BuyBox com margem superior.';
+      } else if (lucroC > 0 && lucroP <= 0) {
+        parecer = 'Operar exclusivamente no ML Clássico à vista/PIX. O canal Premium fica inviabilizado pela tarifa de 16,5% do parcelamento sem juros.';
+      } else {
+        parecer = 'Ativo Reprovado: Preço de aquisição acima do teto de viabilidade atual do Mercado Livre. Não adquirir.';
+      }
+
+      const sep = '------------------------------';
+
       const linhas = [
         linkLimpo,
         '',
-        '*SMART MELI ULTRA | AUDITORIA*',
-        '_' + dataStr + ' às ' + horaStr + '_',
+        '*EXTRATO DE AUDITORIA CONTÁBIL*',
+        '*SMART MELI ULTRA*',
+        sep,
+        '*Item:* ' + titulo,
+        '*Data:* ' + dataStr + ' às ' + horaStr,
+        '*Preço ML:* R$ ' + fmtBRL(precoAlvo),
+        blocoCusto,
+        sep,
         '',
-        '*DADOS DO ATIVO*',
-        '• *Item:* ' + titulo,
-        '• *Preço no ML:* R$ ' + precoAlvo.toFixed(2),
-        linhaCusto,
+        '*1. DEMONSTRATIVO CLÁSSICO*',
+        '(+) Preço Venda: R$ ' + fmtBRL(precoAlvo),
+        '(-) Custo Compra: R$ ' + fmtBRL(custoCompra),
+        '(-) Frete Envios: R$ ' + fmtBRL(frete),
+        '(-) Tarifa ML (11,5%): R$ ' + fmtBRL(comissaoC),
+        '(-) Impostos (6,0%): R$ ' + fmtBRL(impostoC),
+        '(-) Avarias (1,5%): R$ ' + fmtBRL(avariasC),
+        sep,
+        '(=) *LUCRO LÍQUIDO:* *R$ ' + fmtBRL(lucroC) + '*',
+        '(=) *MARGEM REAL:* *' + margemC + '%*',
+        'Veredito: ' + vereditoClassico,
+        sep,
         '',
-        '*1. MERCADO LIVRE CLÁSSICO*',
-        '• *Lucro Líquido:* *R$ ' + lucroC.toFixed(2) + '*',
-        '• *Margem Real:* *' + margemC + '%*',
-        '• *Taxas Totais:* R$ ' + taxasTotaisC.toFixed(2) + ' (Tarifa 11,5% + Impostos + Frete)',
-        '• *Veredito:* ' + (lucroC > 0 ? 'OPORTUNIDADE (ALTA MARGEM)' : 'PREJUÍZO'),
+        '*2. DEMONSTRATIVO PREMIUM (12x)*',
+        '(+) Preço Venda: R$ ' + fmtBRL(precoAlvo),
+        '(-) Custo Compra: R$ ' + fmtBRL(custoCompra),
+        '(-) Frete Envios: R$ ' + fmtBRL(frete),
+        '(-) Tarifa ML (16,5%): R$ ' + fmtBRL(comissaoP),
+        '(-) Impostos (6,0%): R$ ' + fmtBRL(impostoP),
+        '(-) Avarias (1,5%): R$ ' + fmtBRL(avariasP),
+        sep,
+        '(=) *LUCRO LÍQUIDO:* *R$ ' + fmtBRL(lucroP) + '*',
+        '(=) *MARGEM REAL:* *' + margemP + '%*',
+        'Veredito: ' + vereditoPremium,
+        sep,
         '',
-        '*2. MERCADO LIVRE PREMIUM (12x)*',
-        '• *Lucro Líquido:* *R$ ' + lucroP.toFixed(2) + '*',
-        '• *Margem Real:* *' + margemP + '%*',
-        '• *Taxas Totais:* R$ ' + taxasTotaisP.toFixed(2) + ' (Tarifa 16,5% + Impostos + Frete)',
-        '• *Veredito:* ' + (lucroP > 0 ? 'OPORTUNIDADE (ALTO GIRO)' : 'PREJUÍZO (TAXA 12X)'),
+        '*PARECER ESTRATÉGICO*',
+        parecer,
         '',
-        '*DIRETRIZ ESTRATÉGICA*',
-        diretriz,
-        '',
-        '_Smart Meli Ultra • Inteligência Contábil_'
+        '_Smart Meli Ultra • Auditoria IA_'
       ];
 
       const msg = linhas.join('\n');
