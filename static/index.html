@@ -104,69 +104,69 @@
       const dataStr = agora.toLocaleDateString('pt-BR');
       const horaStr = agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
-      let blocoCusto = '';
+      const sep = '--------------------------';
+
+      let linhasCusto = [];
       if (isUSD) {
-        blocoCusto = '*Custo (CMV):* US$ ' + fmtBRL(custoNum) + '\n➔ *R$ ' + fmtBRL(custoCompra) + '* (Câmbio R$ ' + fmtCot(cot) + ')';
+        linhasCusto = [
+          '*Custo US$:* US$ ' + fmtBRL(custoNum),
+          '*Custo R$:* R$ ' + fmtBRL(custoCompra),
+          '*Câmbio:* R$ ' + fmtCot(cot)
+        ];
       } else {
-        blocoCusto = '*Custo (CMV):* *R$ ' + fmtBRL(custoCompra) + '*';
+        linhasCusto = [
+          '*Custo R$:* R$ ' + fmtBRL(custoCompra)
+        ];
       }
 
-      let vereditoClassico = lucroC > 0 ? '*OPORTUNIDADE*' : '*PREJUÍZO*';
-      let vereditoPremium = lucroP > 0 ? '*OPORTUNIDADE*' : '*PREJUÍZO (TAXA 12X)*';
-
-      let parecer = '';
-      if (lucroC > 0 && lucroP > 0) {
-        parecer = 'Anúncio Duplo Recomendado: Publicar anúncio Premium a R$ ' + fmtBRL(precoAlvo) + ' para capturar compras em 12x sem juros e anúncio Clássico com desconto à vista para dominar o BuyBox com margem superior.';
+      let vereditoFinal = '*OPORTUNIDADE*';
+      let estrategiaFinal = 'ANÚNCIO DUPLO';
+      if (lucroC <= 0 && lucroP <= 0) {
+        vereditoFinal = '*REPROVADO*';
+        estrategiaFinal = 'NÃO ADQUIRIR';
       } else if (lucroC > 0 && lucroP <= 0) {
-        parecer = 'Operar exclusivamente no ML Clássico à vista/PIX. O canal Premium fica inviabilizado pela tarifa de 16,5% do parcelamento sem juros.';
-      } else {
-        parecer = 'Ativo Reprovado: Preço de aquisição acima do teto de viabilidade atual do Mercado Livre. Não adquirir.';
+        vereditoFinal = '*VIÁVEL (CLÁSSICO)*';
+        estrategiaFinal = 'EXCLUSIVO À VISTA';
       }
-
-      const sep = '------------------------------';
 
       const linhas = [
         linkLimpo,
         '',
-        '*EXTRATO DE AUDITORIA CONTÁBIL*',
-        '*SMART MELI ULTRA*',
+        '*EXTRATO SMART MELI ULTRA*',
         sep,
         '*Item:* ' + titulo,
         '*Data:* ' + dataStr + ' às ' + horaStr,
         '*Preço ML:* R$ ' + fmtBRL(precoAlvo),
-        blocoCusto,
+        ...linhasCusto,
         sep,
-        '',
-        '*1. DEMONSTRATIVO CLÁSSICO*',
-        '(+) Preço Venda: R$ ' + fmtBRL(precoAlvo),
-        '(-) Custo Compra: R$ ' + fmtBRL(custoCompra),
-        '(-) Frete Envios: R$ ' + fmtBRL(frete),
-        '(-) Tarifa ML (11,5%): R$ ' + fmtBRL(comissaoC),
-        '(-) Impostos (6,0%): R$ ' + fmtBRL(impostoC),
-        '(-) Avarias (1,5%): R$ ' + fmtBRL(avariasC),
+        '*1. ML CLÁSSICO (11,5%)*',
+        '(+) Venda: R$ ' + fmtBRL(precoAlvo),
+        '(-) Custo: R$ ' + fmtBRL(custoCompra),
+        '(-) Frete: R$ ' + fmtBRL(frete),
+        '(-) Tarifa ML: R$ ' + fmtBRL(comissaoC),
+        '(-) Imposto: R$ ' + fmtBRL(impostoC),
+        '(-) Avarias: R$ ' + fmtBRL(avariasC),
         sep,
-        '(=) *LUCRO LÍQUIDO:* *R$ ' + fmtBRL(lucroC) + '*',
-        '(=) *MARGEM REAL:* *' + margemC + '%*',
-        'Veredito: ' + vereditoClassico,
+        '(=) *LUCRO:* *R$ ' + fmtBRL(lucroC) + '*',
+        '(=) *MARGEM:* *' + margemC + '%*',
+        'Status: ' + (lucroC > 0 ? '*OPORTUNIDADE*' : '*PREJUÍZO*'),
         sep,
-        '',
-        '*2. DEMONSTRATIVO PREMIUM (12x)*',
-        '(+) Preço Venda: R$ ' + fmtBRL(precoAlvo),
-        '(-) Custo Compra: R$ ' + fmtBRL(custoCompra),
-        '(-) Frete Envios: R$ ' + fmtBRL(frete),
-        '(-) Tarifa ML (16,5%): R$ ' + fmtBRL(comissaoP),
-        '(-) Impostos (6,0%): R$ ' + fmtBRL(impostoP),
-        '(-) Avarias (1,5%): R$ ' + fmtBRL(avariasP),
+        '*2. ML PREMIUM (16,5%)*',
+        '(+) Venda: R$ ' + fmtBRL(precoAlvo),
+        '(-) Custo: R$ ' + fmtBRL(custoCompra),
+        '(-) Frete: R$ ' + fmtBRL(frete),
+        '(-) Tarifa ML: R$ ' + fmtBRL(comissaoP),
+        '(-) Imposto: R$ ' + fmtBRL(impostoP),
+        '(-) Avarias: R$ ' + fmtBRL(avariasP),
         sep,
-        '(=) *LUCRO LÍQUIDO:* *R$ ' + fmtBRL(lucroP) + '*',
-        '(=) *MARGEM REAL:* *' + margemP + '%*',
-        'Veredito: ' + vereditoPremium,
+        '(=) *LUCRO:* *R$ ' + fmtBRL(lucroP) + '*',
+        '(=) *MARGEM:* *' + margemP + '%*',
+        'Status: ' + (lucroP > 0 ? '*OPORTUNIDADE*' : '*PREJUÍZO*'),
         sep,
-        '',
-        '*PARECER ESTRATÉGICO*',
-        parecer,
-        '',
-        '_Smart Meli Ultra • Auditoria IA_'
+        '*VEREDITO:* ' + vereditoFinal,
+        '*ESTRATÉGIA:* ' + estrategiaFinal,
+        sep,
+        '_Smart Meli Ultra_'
       ];
 
       const msg = linhas.join('\n');
